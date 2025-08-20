@@ -2,11 +2,16 @@
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
+import { useRouter } from 'next/navigation'
+import { signInWithEmailAndPassword } from 'firebase/auth'
+import { collection, query, where, getDocs } from 'firebase/firestore'
+import { auth, db } from '@/lib/firebase'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { EyeIcon, EyeSlashIcon, UserIcon, LockClosedIcon } from '@heroicons/react/24/outline'
+import Loader, { PulseLoader } from '@/components/ui/loader'
+import { EyeIcon, EyeSlashIcon, UserIcon, LockClosedIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import Image from 'next/image'
 
 export default function LoginPage() {
@@ -14,16 +19,71 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+  const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
+    setError('')
     
-    // Simulate login process
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    
-    setIsLoading(false)
-    console.log('Login attempt:', { email, password })
+    try {
+      // Authentification Firebase
+      console.log('Tentative de connexion avec:', { email, passwordLength: password.length })
+      const userCredential = await signInWithEmailAndPassword(auth, email, password)
+      const user = userCredential.user
+      console.log('Authentification réussie pour:', user.email)
+      
+      // Recherche du document client par uidClient
+      console.log('UID utilisateur connecté:', user.uid)
+      
+      // Requête pour trouver le document où uidclient correspond à l'UID utilisateur
+      const clientsRef = collection(db, 'clients')
+      const q = query(clientsRef, where('uidclient', '==', user.uid))
+      const querySnapshot = await getDocs(q)
+      
+      if (!querySnapshot.empty) {
+        // Document trouvé avec uidClient correspondant
+        const clientDoc = querySnapshot.docs[0]
+        const clientData = clientDoc.data()
+        
+        console.log('Document client trouvé:', { id: clientDoc.id, data: clientData })
+        console.log('Connexion réussie:', { uid: user.uid, clientData })
+        
+        // Redirection vers le dashboard
+        router.push('/dashboard')
+      } else {
+        console.log('Aucun document trouvé avec uidClient:', user.uid)
+        setError('Aucun profil client trouvé pour ce compte.')
+        await auth.signOut()
+      }
+    } catch (error: any) {
+      console.error('Erreur de connexion:', error)
+      switch (error.code) {
+        case 'auth/user-not-found':
+          setError('Aucun compte trouvé avec cette adresse email.')
+          break
+        case 'auth/wrong-password':
+          setError('Mot de passe incorrect.')
+          break
+        case 'auth/invalid-credential':
+          setError('Email ou mot de passe incorrect. Vérifiez que le compte existe dans Firebase Auth.')
+          break
+        case 'auth/invalid-email':
+          setError('Adresse email invalide.')
+          break
+        case 'auth/too-many-requests':
+          setError('Trop de tentatives. Veuillez réessayer plus tard.')
+          break
+        case 'auth/user-disabled':
+          setError('Ce compte a été désactivé.')
+          break
+        default:
+          setError(`Erreur de connexion: ${error.message}`)
+      }
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const containerVariants = {
@@ -51,6 +111,15 @@ export default function LoginPage() {
     idle: { scale: 1 },
     hover: { scale: 1.02 },
     tap: { scale: 0.98 }
+  }
+
+  // Affichage du loader pulse pendant la connexion
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-4">
+        <PulseLoader text="Connexion en cours..." />
+      </div>
+    )
   }
 
   return (
@@ -86,6 +155,17 @@ export default function LoginPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-center gap-2"
+                >
+                  <ExclamationTriangleIcon className="w-5 h-5 text-red-500" />
+                  <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+                </motion.div>
+              )}
+
               <form onSubmit={handleSubmit} className="space-y-6">
                 <motion.div variants={itemVariants} className="space-y-2">
                   <Label htmlFor="email" className="text-sm font-medium">
@@ -100,6 +180,7 @@ export default function LoginPage() {
                       onChange={(e) => setEmail(e.target.value)}
                       className="pl-10 h-12 transition-all duration-200 focus:ring-2 focus:ring-primary/20"
                       required
+                      disabled={isLoading}
                     />
                     <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                   </div>
@@ -118,6 +199,7 @@ export default function LoginPage() {
                       onChange={(e) => setPassword(e.target.value)}
                       className="pl-10 pr-12 h-12 transition-all duration-200 focus:ring-2 focus:ring-primary/20"
                       required
+                      disabled={isLoading}
                     />
                     <LockClosedIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                     <button
@@ -167,18 +249,7 @@ export default function LoginPage() {
                       disabled={isLoading}
                     >
                       {isLoading ? (
-                        <motion.div
-                          className="flex items-center space-x-2"
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                        >
-                          <motion.div
-                            className="w-4 h-4 border-2 border-white border-t-transparent rounded-full"
-                            animate={{ rotate: 360 }}
-                            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                          />
-                          <span>Connexion...</span>
-                        </motion.div>
+                        <Loader size="sm" text="Connexion..." />
                       ) : (
                         'Se connecter'
                       )}
