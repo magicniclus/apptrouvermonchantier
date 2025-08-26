@@ -23,7 +23,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import {
   CalendarIcon,
   UserIcon,
@@ -45,11 +44,11 @@ interface Project {
   telephone: string
   projet: string
   etape: string
-  date: any
+  date: unknown
   commentaires?: Array<{
     id: string
     texte: string
-    date: any
+    date: unknown
     auteur: string
   }>
 }
@@ -104,7 +103,7 @@ export default function ProjectModal({
   const [comments, setComments] = useState<Array<{
     id: string
     texte: string
-    date: any
+    date: unknown
     auteur: string
   }>>([])
 
@@ -122,7 +121,7 @@ export default function ProjectModal({
       })) as Array<{
         id: string
         texte: string
-        date: any
+        date: unknown
         auteur: string
       }>
       setComments(commentsData)
@@ -179,7 +178,7 @@ export default function ProjectModal({
 
       setNewComment('')
     } catch (error) {
-      console.error('Erreur lors de l\'ajout du commentaire:', error)
+      console.error('Erreur lors de l&apos;ajout du commentaire:', error)
     } finally {
       setIsLoading(false)
     }
@@ -194,9 +193,9 @@ export default function ProjectModal({
     }
   }
 
-  const formatDate = (date: any) => {
+  const formatDate = (date: unknown) => {
     if (!date) return 'Date non définie'
-    const dateObj = date.toDate ? date.toDate() : new Date(date)
+    const dateObj = (date as { toDate?: () => Date })?.toDate ? (date as { toDate: () => Date }).toDate() : new Date(date as string | number | Date)
     return dateObj.toLocaleDateString('fr-FR', {
       year: 'numeric',
       month: 'long',
@@ -215,7 +214,7 @@ export default function ProjectModal({
                 Détails du projet <br/> {project.projet}
               </DialogTitle>
               <DialogDescription>
-                Gérez les informations et l'état de ce projet
+                Gérez les informations et l&apos;état de ce projet
               </DialogDescription>
             </div>
             <div className="flex items-center gap-3">

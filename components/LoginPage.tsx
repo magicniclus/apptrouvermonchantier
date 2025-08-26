@@ -57,9 +57,10 @@ export default function LoginPage() {
         setError('Aucun profil client trouvé pour ce compte.')
         await auth.signOut()
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur de connexion:', error)
-      switch (error.code) {
+      const firebaseError = error as { code?: string; message?: string }
+      switch (firebaseError.code) {
         case 'auth/user-not-found':
           setError('Aucun compte trouvé avec cette adresse email.')
           break
@@ -79,7 +80,7 @@ export default function LoginPage() {
           setError('Ce compte a été désactivé.')
           break
         default:
-          setError(`Erreur de connexion: ${error.message}`)
+          setError(`Erreur de connexion: ${firebaseError.message || 'Erreur inconnue'}`)
       }
     } finally {
       setIsLoading(false)

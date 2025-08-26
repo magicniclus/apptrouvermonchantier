@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import ProjectModal from './ProjectModal'
 import {
   CalendarIcon,
@@ -22,7 +21,7 @@ interface Project {
   telephone: string
   projet: string
   etape: string
-  date: any
+  date: unknown
 }
 
 interface ProjectCardProps {
@@ -51,10 +50,10 @@ export default function ProjectCard({ project, index, clientId, onProjectUpdate 
     }
   }
 
-  const formatDate = (date: any) => {
+  const formatDate = (date: unknown) => {
     if (!date) return 'Date non définie'
     try {
-      const dateObj = date.toDate ? date.toDate() : new Date(date)
+      const dateObj = (date as { toDate?: () => Date })?.toDate ? (date as { toDate: () => Date }).toDate() : new Date(date as string | number | Date)
       return dateObj.toLocaleDateString('fr-FR', {
         day: '2-digit',
         month: '2-digit',

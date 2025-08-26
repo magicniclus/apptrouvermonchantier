@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth'
+import { createUserWithEmailAndPassword } from 'firebase/auth'
 import { doc, setDoc } from 'firebase/firestore'
 import { auth, db } from '@/lib/firebase'
 import { Button } from '@/components/ui/button'
@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
-export default function CreationDeComptePage() {
+function CreationDeComptePageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [uid, setUid] = useState<string>('')
@@ -100,11 +100,12 @@ export default function CreationDeComptePage() {
       // Rediriger vers le dashboard
       router.push('/dashboard')
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erreur lors de la création du compte:', error)
       
       // Gérer les erreurs Firebase spécifiques
-      switch (error.code) {
+      const firebaseError = error as { code?: string; message?: string }
+      switch (firebaseError.code) {
         case 'auth/email-already-in-use':
           setError('Cette adresse email est déjà utilisée')
           break
@@ -198,5 +199,13 @@ export default function CreationDeComptePage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function CreationDeComptePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50">Chargement...</div>}>
+      <CreationDeComptePageContent />
+    </Suspense>
   )
 }

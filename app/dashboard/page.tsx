@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -14,6 +14,17 @@ import { useProjects } from '@/hooks/useProjects'
 import ProjectCard from '@/components/ProjectCard'
 import Loader, { PulseLoader } from '@/components/ui/loader'
 import { HomeIcon, UserIcon, CogIcon, ChartBarIcon, ExclamationTriangleIcon, ArrowRightOnRectangleIcon, MagnifyingGlassIcon, CalendarIcon, TagIcon, GlobeAltIcon } from '@heroicons/react/24/outline'
+
+interface Project {
+  id: string
+  nom: string
+  prenom: string
+  email: string
+  telephone: string
+  projet: string
+  etape: string
+  date: unknown
+}
 
 export default function Dashboard() {
   const { user, clientData, loading: authLoading } = useAuth()
@@ -286,7 +297,7 @@ export default function Dashboard() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Toutes les dates</SelectItem>
-                  <SelectItem value="today">Aujourd'hui</SelectItem>
+                  <SelectItem value="today">Aujourd&apos;hui</SelectItem>
                   <SelectItem value="week">Cette semaine</SelectItem>
                   <SelectItem value="month">Ce mois</SelectItem>
                   <SelectItem value="older">Plus ancien</SelectItem>
@@ -299,9 +310,13 @@ export default function Dashboard() {
           {searchText || dateFilter !== 'all' || etapeFilter !== 'all' ? (
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
               {filteredProjects.length} projet{filteredProjects.length > 1 ? 's' : ''} trouvé{filteredProjects.length > 1 ? 's' : ''}
-              {searchText && ` pour "${searchText}"`}
+              {searchText && ` pour &quot;${searchText}&quot;`}
             </p>
-          ) : null}
+          ) : (
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              {filteredProjects.length} projet{filteredProjects.length > 1 ? 's' : ''} trouvé{filteredProjects.length > 1 ? 's' : ''}
+            </p>
+          )}
         </motion.div>
 
         {error && (
@@ -327,7 +342,7 @@ export default function Dashboard() {
                   <p className="text-gray-600 dark:text-gray-400">
                     {searchText || dateFilter !== 'all' || etapeFilter !== 'all'
                       ? 'Aucun projet ne correspond à vos critères de recherche.'
-                      : 'Vous n\'avez pas encore de projets enregistrés.'
+                      : 'Vous n&apos;avez pas encore de projets enregistrés.'
                     }
                   </p>
                 </div>
@@ -344,8 +359,8 @@ export default function Dashboard() {
                 project={project} 
                 index={index}
                 clientId={clientData.id}
-                onProjectUpdate={(updatedProject: any) => {
-                  setProjects((prev: any[]) => prev.map((p: any) => p.id === updatedProject.id ? updatedProject : p))
+                onProjectUpdate={(updatedProject: Project) => {
+                  setProjects((prev: Project[]) => prev.map((p: Project) => p.id === updatedProject.id ? updatedProject : p))
                 }}
               />
             ))}
