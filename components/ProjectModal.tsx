@@ -34,6 +34,7 @@ import {
   CheckIcon,
   XMarkIcon,
   TrashIcon,
+  GlobeAltIcon,
 } from '@heroicons/react/24/outline'
 
 interface Project {
@@ -42,9 +43,12 @@ interface Project {
   prenom: string
   email: string
   telephone: string
-  projet: string
-  etape: string
-  date: unknown
+  motif: string
+  status: string
+  dateCreation: unknown
+  source?: string
+  rgpd?: boolean
+  uid?: string
   commentaires?: Array<{
     id: string
     texte: string
@@ -61,7 +65,8 @@ interface ProjectModalProps {
   onProjectUpdate: (updatedProject: Project) => void
 }
 
-const etapes = [
+const statuses = [
+  'nouveau',
   'A contacter',
   'En cours',
   'En attente',
@@ -69,12 +74,12 @@ const etapes = [
   'Annulé'
 ]
 
-const getEtapeBadgeColor = (etape: string) => {
-  switch (etape?.toLowerCase()) {
-    case 'a contacter':
-      return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300'
+const getStatusBadgeColor = (status: string) => {
+  switch (status?.toLowerCase()) {
     case 'nouveau':
       return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300'
+    case 'a contacter':
+      return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300'
     case 'en cours':
       return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
     case 'en attente':
@@ -149,7 +154,7 @@ export default function ProjectModal({
     try {
       const projectRef = doc(db, 'clients', clientId, 'projets', project.id)
       await updateDoc(projectRef, {
-        etape: editedProject.etape,
+        status: editedProject.status,
         email: editedProject.email,
       })
 
@@ -193,9 +198,9 @@ export default function ProjectModal({
     }
   }
 
-  const formatDate = (date: unknown) => {
-    if (!date) return 'Date non définie'
-    const dateObj = (date as { toDate?: () => Date })?.toDate ? (date as { toDate: () => Date }).toDate() : new Date(date as string | number | Date)
+  const formatDate = (dateCreation: unknown) => {
+    if (!dateCreation) return 'Date non définie'
+    const dateObj = (dateCreation as { toDate?: () => Date })?.toDate ? (dateCreation as { toDate: () => Date }).toDate() : new Date(dateCreation as string | number | Date)
     return dateObj.toLocaleDateString('fr-FR', {
       year: 'numeric',
       month: 'long',
@@ -205,13 +210,13 @@ export default function ProjectModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-none w-[95vw] max-h-[90vh] overflow-y-auto" style={{ width: '95vw', maxWidth: 'none' }}>
         <DialogHeader>
           <div className="flex items-center justify-between">
             <div>
               <DialogTitle className="flex items-center gap-2">
                 <HomeIcon className="w-7 h-7" />
-                Détails du projet <br/> {project.projet}
+                Détails du projet <br/> {project.motif}
               </DialogTitle>
               <DialogDescription>
                 Gérez les informations et l&apos;état de ce projet
@@ -260,7 +265,7 @@ export default function ProjectModal({
                   <CalendarIcon className="w-5 h-5 text-gray-500" />
                   <div>
                     <p className="text-sm font-medium">Date de création</p>
-                    <p className="text-sm text-gray-600">{formatDate(project.date)}</p>
+                    <p className="text-sm text-gray-600">{formatDate(project.dateCreation)}</p>
                   </div>
                 </div>
 
@@ -283,38 +288,58 @@ export default function ProjectModal({
 
                 <div className="flex items-center gap-3">
                   <div className="w-5 h-5 flex items-center justify-center">
-                    <div className={`w-3 h-3 rounded-full ${getEtapeBadgeColor(project.etape).includes('purple') ? 'bg-purple-500' : 
-                      getEtapeBadgeColor(project.etape).includes('blue') ? 'bg-blue-500' :
-                      getEtapeBadgeColor(project.etape).includes('yellow') ? 'bg-yellow-500' :
-                      getEtapeBadgeColor(project.etape).includes('orange') ? 'bg-orange-500' :
-                      getEtapeBadgeColor(project.etape).includes('green') ? 'bg-green-500' :
-                      getEtapeBadgeColor(project.etape).includes('red') ? 'bg-red-500' : 'bg-gray-500'}`}></div>
+                    <div className={`w-3 h-3 rounded-full ${getStatusBadgeColor(project.status).includes('purple') ? 'bg-purple-500' : 
+                      getStatusBadgeColor(project.status).includes('blue') ? 'bg-blue-500' :
+                      getStatusBadgeColor(project.status).includes('yellow') ? 'bg-yellow-500' :
+                      getStatusBadgeColor(project.status).includes('orange') ? 'bg-orange-500' :
+                      getStatusBadgeColor(project.status).includes('green') ? 'bg-green-500' :
+                      getStatusBadgeColor(project.status).includes('red') ? 'bg-red-500' : 'bg-gray-500'}`}></div>
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm font-medium">Étape</p>
+                    <p className="text-sm font-medium">Statut</p>
                     {isEditing ? (
                       <Select
-                        value={editedProject?.etape || project.etape}
-                        onValueChange={(value) => setEditedProject(prev => prev ? { ...prev, etape: value } : null)}
+                        value={editedProject?.status || project.status}
+                        onValueChange={(value) => setEditedProject(prev => prev ? { ...prev, status: value } : null)}
                       >
                         <SelectTrigger className="w-full mt-1">
                           <SelectValue>
-                            {editedProject?.etape || project.etape}
+                            {editedProject?.status || project.status}
                           </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
-                          {etapes.map((etape) => (
-                            <SelectItem key={etape} value={etape}>
-                              {etape}
+                          {statuses.map((status) => (
+                            <SelectItem key={status} value={status}>
+                              {status}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     ) : (
-                      <p className="text-sm text-gray-600">{project.etape}</p>
+                      <p className="text-sm text-gray-600">{project.status}</p>
                     )}
                   </div>
                 </div>
+
+                {project.source && (
+                  <div className="flex items-center gap-3">
+                    <GlobeAltIcon className="w-5 h-5 text-gray-500" />
+                    <div>
+                      <p className="text-sm font-medium">Source</p>
+                      <p className="text-sm text-gray-600">{project.source}</p>
+                    </div>
+                  </div>
+                )}
+
+                {project.rgpd !== undefined && (
+                  <div className="flex items-center gap-3">
+                    <CheckIcon className="w-5 h-5 text-gray-500" />
+                    <div>
+                      <p className="text-sm font-medium">Consentement RGPD</p>
+                      <p className="text-sm text-gray-600">{project.rgpd ? 'Accepté' : 'Refusé'}</p>
+                    </div>
+                  </div>
+                )}
               </div>
 
             </CardContent>
@@ -330,7 +355,7 @@ export default function ProjectModal({
             </CardHeader>
             <CardContent>
               <p className="text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
-                {project.projet}
+                {project.motif}
               </p>
 
               {isEditing && (

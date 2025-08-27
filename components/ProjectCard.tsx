@@ -19,9 +19,12 @@ interface Project {
   prenom: string
   email: string
   telephone: string
-  projet: string
-  etape: string
-  date: unknown
+  motif: string
+  status: string
+  dateCreation: unknown
+  source?: string
+  rgpd?: boolean
+  uid?: string
 }
 
 interface ProjectCardProps {
@@ -33,8 +36,10 @@ interface ProjectCardProps {
 
 export default function ProjectCard({ project, index, clientId, onProjectUpdate }: ProjectCardProps) {
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const getEtapeColor = (etape: string) => {
-    switch (etape?.toLowerCase()) {
+  const getStatusColor = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'nouveau':
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300'
       case 'a contacter':
         return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300'
       case 'en cours':
@@ -50,10 +55,10 @@ export default function ProjectCard({ project, index, clientId, onProjectUpdate 
     }
   }
 
-  const formatDate = (date: unknown) => {
-    if (!date) return 'Date non définie'
+  const formatDate = (dateCreation: unknown) => {
+    if (!dateCreation) return 'Date non définie'
     try {
-      const dateObj = (date as { toDate?: () => Date })?.toDate ? (date as { toDate: () => Date }).toDate() : new Date(date as string | number | Date)
+      const dateObj = (dateCreation as { toDate?: () => Date })?.toDate ? (dateCreation as { toDate: () => Date }).toDate() : new Date(dateCreation as string | number | Date)
       return dateObj.toLocaleDateString('fr-FR', {
         day: '2-digit',
         month: '2-digit',
@@ -94,7 +99,7 @@ export default function ProjectCard({ project, index, clientId, onProjectUpdate 
           <div className="space-y-3">
             <div>
               <CardTitle className="text-lg font-semibold text-gray-900 dark:text-white">
-                {project.projet || 'Projet sans nom'}
+                {project.motif || 'Projet sans nom'}
               </CardTitle>
               <CardDescription className="mt-1">
                 <div className="flex items-center gap-2">
@@ -103,8 +108,8 @@ export default function ProjectCard({ project, index, clientId, onProjectUpdate 
                 </div>
               </CardDescription>
             </div>
-            <Badge className={getEtapeColor(project.etape)} style={{width: 'fit-content'}}>
-              {project.etape || 'Non défini'}
+            <Badge className={getStatusColor(project.status)} style={{width: 'fit-content'}}>
+              {project.status || 'Non défini'}
             </Badge>
           </div>
         </CardHeader>
@@ -113,7 +118,7 @@ export default function ProjectCard({ project, index, clientId, onProjectUpdate 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
               <CalendarIcon className="w-4 h-4 flex-shrink-0" />
-              <span>{formatDate(project.date)}</span>
+              <span>{formatDate(project.dateCreation)}</span>
             </div>
             
             {project.telephone && (

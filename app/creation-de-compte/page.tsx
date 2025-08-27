@@ -89,13 +89,13 @@ function CreationDeComptePageContent() {
       
       const user = userCredential.user
 
-      // Sauvegarder les données client dans Firestore
+      // Sauvegarder les données client dans Firestore (merge pour préserver les données existantes)
       await setDoc(doc(db, 'clients', uid), {
         uidclient: user.uid,
         email: formData.email,
         dateCreation: new Date(),
         statut: 'actif'
-      })
+      }, { merge: true })
 
       // Rediriger vers le dashboard
       router.push('/dashboard')

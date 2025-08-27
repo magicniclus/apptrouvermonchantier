@@ -7,12 +7,15 @@ import { db } from '@/lib/firebase'
 interface Project {
   id: string
   nom: string
-  email: string
-  etape: string
   prenom: string
-  projet: string
+  email: string
   telephone: string
-  date: any
+  motif: string
+  status: string
+  dateCreation: unknown
+  source?: string
+  rgpd?: boolean
+  uid?: string
   [key: string]: any
 }
 
@@ -46,8 +49,10 @@ export function useProjects(clientId: string | null) {
         
         // Trier par date (plus récent en premier)
         projectsList.sort((a, b) => {
-          if (a.date && b.date) {
-            return b.date.toDate() - a.date.toDate()
+          if (a.dateCreation && b.dateCreation) {
+            const dateA = (a.dateCreation as { toDate?: () => Date })?.toDate ? (a.dateCreation as { toDate: () => Date }).toDate() : new Date(a.dateCreation as string | number | Date)
+            const dateB = (b.dateCreation as { toDate?: () => Date })?.toDate ? (b.dateCreation as { toDate: () => Date }).toDate() : new Date(b.dateCreation as string | number | Date)
+            return dateB.getTime() - dateA.getTime()
           }
           return 0
         })
@@ -75,7 +80,11 @@ export function useProjects(clientId: string | null) {
             projectsList.push({ id: doc.id, ...doc.data() } as Project)
           })
           projectsList.sort((a, b) => {
-            if (a.date && b.date) return b.date.toDate() - a.date.toDate()
+            if (a.dateCreation && b.dateCreation) {
+              const dateA = (a.dateCreation as { toDate?: () => Date })?.toDate ? (a.dateCreation as { toDate: () => Date }).toDate() : new Date(a.dateCreation as string | number | Date)
+              const dateB = (b.dateCreation as { toDate?: () => Date })?.toDate ? (b.dateCreation as { toDate: () => Date }).toDate() : new Date(b.dateCreation as string | number | Date)
+              return dateB.getTime() - dateA.getTime()
+            }
             return 0
           })
           setProjects(projectsList)

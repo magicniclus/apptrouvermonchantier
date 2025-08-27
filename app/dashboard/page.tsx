@@ -21,9 +21,12 @@ interface Project {
   prenom: string
   email: string
   telephone: string
-  projet: string
-  etape: string
-  date: unknown
+  motif: string
+  status: string
+  dateCreation: unknown
+  source?: string
+  rgpd?: boolean
+  uid?: string
 }
 
 export default function Dashboard() {
@@ -60,18 +63,18 @@ export default function Dashboard() {
     if (searchText.trim()) {
       const search = searchText.toLowerCase()
       filtered = filtered.filter(project => 
-        project.projet?.toLowerCase().includes(search) ||
+        project.motif?.toLowerCase().includes(search) ||
         project.nom?.toLowerCase().includes(search) ||
         project.prenom?.toLowerCase().includes(search) ||
         project.email?.toLowerCase().includes(search) ||
-        project.etape?.toLowerCase().includes(search)
+        project.status?.toLowerCase().includes(search)
       )
     }
 
     // Filtre par étape
     if (etapeFilter !== 'all') {
       filtered = filtered.filter(project => 
-        project.etape?.toLowerCase() === etapeFilter.toLowerCase()
+        project.status?.toLowerCase() === etapeFilter.toLowerCase()
       )
     }
 
@@ -79,8 +82,8 @@ export default function Dashboard() {
     if (dateFilter !== 'all') {
       const now = new Date()
       filtered = filtered.filter(project => {
-        if (!project.date) return false
-        const projectDate = project.date.toDate ? project.date.toDate() : new Date(project.date)
+        if (!project.dateCreation) return false
+        const projectDate = (project.dateCreation as { toDate?: () => Date })?.toDate ? (project.dateCreation as { toDate: () => Date }).toDate() : new Date(project.dateCreation as string | number | Date)
         const diffTime = now.getTime() - projectDate.getTime()
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
 
@@ -157,11 +160,11 @@ export default function Dashboard() {
             </div>
             
             <div className="flex items-center gap-4">
-              {clientData?.SiteInternetClient && (
+              {clientData?.siteInternetClient && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => window.open(clientData.SiteInternetClient, '_blank')}
+                  onClick={() => window.open(clientData.siteInternetClient, '_blank')}
                   className="flex items-center gap-2"
                 >
                   <GlobeAltIcon className="w-4 h-4" />
@@ -194,33 +197,33 @@ export default function Dashboard() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           <motion.div variants={itemVariants}>
-            <Card className="hover:shadow-lg transition-shadow">
+            <Card className="hover:shadow-lg transition-shadow h-full">
               <CardHeader className="flex flex-row items-center space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
                   Projets totaux
                 </CardTitle>
                 <HomeIcon className="h-4 w-4 text-muted-foreground ml-auto" />
               </CardHeader>
-              <CardContent>
+              <CardContent className="flex flex-col justify-between flex-1">
                 <div className="text-2xl font-bold">{projects.length}</div>
                 <p className="text-xs text-muted-foreground">
-                  {projects.filter(p => p.etape?.toLowerCase() === 'en cours').length} en cours
+                  {projects.filter(p => p.status?.toLowerCase() === 'en cours').length} en cours
                 </p>
               </CardContent>
             </Card>
           </motion.div>
 
           <motion.div variants={itemVariants}>
-            <Card className="hover:shadow-lg transition-shadow">
+            <Card className="hover:shadow-lg transition-shadow h-full">
               <CardHeader className="flex flex-row items-center space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
                   Projets terminés
                 </CardTitle>
                 <ChartBarIcon className="h-4 w-4 text-muted-foreground ml-auto" />
               </CardHeader>
-              <CardContent>
+              <CardContent className="flex flex-col justify-between flex-1">
                 <div className="text-2xl font-bold">
-                  {projects.filter(p => p.etape?.toLowerCase() === 'terminé').length}
+                  {projects.filter(p => p.status?.toLowerCase() === 'terminé').length}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Projets finalisés
@@ -230,14 +233,14 @@ export default function Dashboard() {
           </motion.div>
 
           <motion.div variants={itemVariants}>
-            <Card className="hover:shadow-lg transition-shadow">
+            <Card className="hover:shadow-lg transition-shadow h-full">
               <CardHeader className="flex flex-row items-center space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
                   Contact
                 </CardTitle>
                 <UserIcon className="h-4 w-4 text-muted-foreground ml-auto" />
               </CardHeader>
-              <CardContent>
+              <CardContent className="flex flex-col justify-between flex-1">
                 <div className="text-sm font-medium">{clientData.telephone}</div>
                 <p className="text-xs text-muted-foreground truncate">
                   {clientData.email}
@@ -279,7 +282,8 @@ export default function Dashboard() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Toutes les étapes</SelectItem>
+                  <SelectItem value="all">Tous les statuts</SelectItem>
+                  <SelectItem value="nouveau">Nouveau</SelectItem>
                   <SelectItem value="A contacter">A contacter</SelectItem>
                   <SelectItem value="En cours">En cours</SelectItem>
                   <SelectItem value="En attente">En attente</SelectItem>
