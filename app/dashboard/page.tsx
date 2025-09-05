@@ -14,6 +14,9 @@ import { useProjects } from '@/hooks/useProjects'
 import ProjectCard from '@/components/ProjectCard'
 import Loader, { PulseLoader } from '@/components/ui/loader'
 import { HomeIcon, UserIcon, CogIcon, ChartBarIcon, ExclamationTriangleIcon, ArrowRightOnRectangleIcon, MagnifyingGlassIcon, CalendarIcon, TagIcon, GlobeAltIcon } from '@heroicons/react/24/outline'
+import {
+  SidebarTrigger,
+} from '@/components/ui/sidebar'
 
 interface Project {
   id: string
@@ -138,130 +141,31 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-        className="container mx-auto px-4 py-8"
-      >
-        <motion.div variants={itemVariants} className="mb-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <img src="/favicon.png" alt="Logo" className="w-10 h-10" />
-              <div>
-                <h1 className="text-4xl font-bold text-gray-900 dark:text-white">
-                  Dashboard
-                </h1>
-                <p className="text-gray-600 dark:text-gray-400">
-                  Bienvenue {clientData.prenom} {clientData.nom}
-                </p>
-              </div>
+    <>
+      <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+        <SidebarTrigger className="-ml-1" />
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            Mes Projets
+          </h1>
+          {projectsLoading && (
+            <div className="flex items-center gap-2">
+              <Loader size="sm" />
+              <span className="text-sm text-gray-500">Chargement...</span>
             </div>
-            
-            <div className="flex items-center gap-4">
-              {clientData?.siteInternetClient && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => window.open(clientData.siteInternetClient, '_blank')}
-                  className="flex items-center gap-2"
-                >
-                  <GlobeAltIcon className="w-4 h-4" />
-                  Mon site
-                </Button>
-              )}
-              
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push('/dashboard/parametre')}
-                className="flex items-center gap-2"
-              >
-                <CogIcon className="w-4 h-4" />
-                Paramètres
-              </Button>
-              
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleLogout}
-                className="flex items-center gap-2 text-red-600 hover:text-red-700 hover:bg-red-50"
-              >
-                <ArrowRightOnRectangleIcon className="w-4 h-4" />
-                Déconnexion
-              </Button>
-            </div>
-          </div>
-        </motion.div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          <motion.div variants={itemVariants}>
-            <Card className="hover:shadow-lg transition-shadow h-full">
-              <CardHeader className="flex flex-row items-center space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  Projets totaux
-                </CardTitle>
-                <HomeIcon className="h-4 w-4 text-muted-foreground ml-auto" />
-              </CardHeader>
-              <CardContent className="flex flex-col justify-between flex-1">
-                <div className="text-2xl font-bold">{projects.length}</div>
-                <p className="text-xs text-muted-foreground">
-                  {projects.filter(p => p.status?.toLowerCase() === 'en cours').length} en cours
-                </p>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div variants={itemVariants}>
-            <Card className="hover:shadow-lg transition-shadow h-full">
-              <CardHeader className="flex flex-row items-center space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  Projets terminés
-                </CardTitle>
-                <ChartBarIcon className="h-4 w-4 text-muted-foreground ml-auto" />
-              </CardHeader>
-              <CardContent className="flex flex-col justify-between flex-1">
-                <div className="text-2xl font-bold">
-                  {projects.filter(p => p.status?.toLowerCase() === 'terminé').length}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Projets finalisés
-                </p>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div variants={itemVariants}>
-            <Card className="hover:shadow-lg transition-shadow h-full">
-              <CardHeader className="flex flex-row items-center space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  Contact
-                </CardTitle>
-                <UserIcon className="h-4 w-4 text-muted-foreground ml-auto" />
-              </CardHeader>
-              <CardContent className="flex flex-col justify-between flex-1">
-                <div className="text-sm font-medium">{clientData.telephone}</div>
-                <p className="text-xs text-muted-foreground truncate">
-                  {clientData.email}
-                </p>
-              </CardContent>
-            </Card>
-          </motion.div>
+          )}
         </div>
+      </header>
+      
+      <div className="flex-1 overflow-auto p-4">
+        <motion.div
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+          className="space-y-6"
+        >
 
-        <motion.div variants={itemVariants} className="mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-              Mes Projets
-            </h2>
-            {projectsLoading && (
-              <div className="flex items-center gap-2">
-                <Loader size="sm" />
-                <span className="text-sm text-gray-500">Chargement...</span>
-              </div>
-            )}
-          </div>
+            <motion.div variants={itemVariants} className="mb-6">
           
           {/* Filtres */}
           <div className="flex flex-col sm:flex-row gap-4 mb-6">
@@ -371,7 +275,8 @@ export default function Dashboard() {
           </div>
         )}
 
-      </motion.div>
-    </div>
+          </motion.div>
+        </div>
+    </>
   )
 }

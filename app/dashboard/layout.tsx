@@ -1,20 +1,20 @@
-import { Metadata } from 'next';
+'use client'
 
-export const metadata: Metadata = {
-  title: 'Dashboard - Trouver Mon Chantier | Gestion de Projets',
-  description: 'Tableau de bord client Trouver Mon Chantier. Suivez l\'avancement de vos projets de construction et rénovation, consultez les détails et communiquez avec votre équipe.',
-  keywords: 'dashboard, tableau de bord, projets construction, suivi chantier, rénovation, gestion projets',
-  openGraph: {
-    title: 'Dashboard - Trouver Mon Chantier | Gestion de Projets',
-    description: 'Suivez l\'avancement de vos projets de construction et rénovation en temps réel.',
-    type: 'website',
-  },
-};
+import { Metadata } from 'next';
+import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar'
+import { AppSidebar } from '@/components/app-sidebar'
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return children;
+  return (
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset>
+        {children}
+      </SidebarInset>
+    </SidebarProvider>
+  );
 }
