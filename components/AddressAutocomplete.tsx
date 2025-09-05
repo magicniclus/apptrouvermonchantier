@@ -30,11 +30,12 @@ export function AddressAutocomplete({
   const [isOpen, setIsOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [justSelected, setJustSelected] = useState(false)
+  const [isFocused, setIsFocused] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const suggestionsRef = useRef<HTMLDivElement>(null)
 
   const searchAddresses = async (query: string) => {
-    if (!query || query.length < 3 || justSelected) {
+    if (!query || query.length < 3 || justSelected || !isFocused) {
       setSuggestions([])
       setIsOpen(false)
       return
@@ -66,7 +67,7 @@ export function AddressAutocomplete({
         }
       ]
       setSuggestions(mockSuggestions)
-      setIsOpen(true)
+      setIsOpen(isFocused)
       return
     }
 
@@ -88,7 +89,7 @@ export function AddressAutocomplete({
       if (response.ok) {
         const data = await response.json()
         setSuggestions(data.features || [])
-        setIsOpen(true)
+        setIsOpen(isFocused)
       } else {
         console.error('Mapbox API error:', response.status)
       }
@@ -157,13 +158,15 @@ export function AddressAutocomplete({
   }
 
   const handleInputFocus = () => {
+    setIsFocused(true)
     // Ne rouvrir que si on a des suggestions ET qu'on n'a pas juste sélectionné une adresse
-    if (suggestions.length > 0 && value.length >= 3) {
+    if (suggestions.length > 0 && value.length >= 3 && !justSelected) {
       setIsOpen(true)
     }
   }
 
   const handleInputBlur = () => {
+    setIsFocused(false)
     // Délai pour permettre le clic sur les suggestions
     setTimeout(() => {
       setIsOpen(false)

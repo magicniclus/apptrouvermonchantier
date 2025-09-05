@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import {
   Sheet,
   SheetContent,
@@ -15,19 +16,43 @@ import { Textarea } from '@/components/ui/textarea'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { X } from 'lucide-react'
 import { AddressAutocomplete } from '@/components/AddressAutocomplete'
+import { db } from '@/lib/firebase'
+import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, updateDoc } from 'firebase/firestore'
+import { useAuth } from '@/hooks/useAuth'
 
 interface ClientDrawerProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  editingClient?: {
+    id: string
+    typeClient: string
+    localisation: string
+    genre: string
+    nom: string
+    prenom: string
+    nomEntreprise: string
+    email: string
+    telephone: string
+    adresse: string
+    complementAdresse: string
+    codePostal: string
+    ville: string
+    commentaires: string
+    dateCreation: any
+    status: string
+  } | null
 }
 
-export function ClientDrawer({ open, onOpenChange }: ClientDrawerProps) {
+export function ClientDrawer({ open, onOpenChange, editingClient }: ClientDrawerProps) {
+  const { user } = useAuth()
+  
   const initialFormData = {
     typeClient: 'particulier',
     localisation: 'france',
     genre: 'non-specifie',
     nom: '',
     prenom: '',
+    nomEntreprise: '',
     email: '',
     telephone: '',
     adresse: '',
@@ -38,12 +63,187 @@ export function ClientDrawer({ open, onOpenChange }: ClientDrawerProps) {
   }
 
   const [formData, setFormData] = useState(initialFormData)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const isEditMode = !!editingClient
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Initialize form with editing client data
+  useEffect(() => {
+    if (editingClient) {
+      setFormData({
+        typeClient: String(editingClient.typeClient || 'particulier'),
+        localisation: String(editingClient.localisation || 'france'),
+        genre: String(editingClient.genre || 'non-specifie'),
+        nom: String(editingClient.nom || ''),
+        prenom: String(editingClient.prenom || ''),
+        nomEntreprise: String(editingClient.nomEntreprise || ''),
+        email: String(editingClient.email || ''),
+        telephone: String(editingClient.telephone || ''),
+        adresse: String(editingClient.adresse || ''),
+        complementAdresse: String(editingClient.complementAdresse || ''),
+        codePostal: String(editingClient.codePostal || ''),
+        ville: String(editingClient.ville || ''),
+        commentaires: String(editingClient.commentaires || '')
+      })
+    } else {
+      setFormData(initialFormData)
+    }
+  }, [editingClient])
+
+  // Validation des champs obligatoires selon le type de client
+  const isFormValid = formData.typeClient === 'particulier' 
+    ? formData.nom.trim() !== '' 
+    : formData.nomEntreprise.trim() !== '' // Nom d'entreprise obligatoire pour les entreprises
+  
+  // Debug validation en temps réel
+  useEffect(() => {
+    console.log('🔍 Form validation:', { 
+      typeClient: formData.typeClient, 
+      nom: formData.nom, 
+      nomTrimmed: formData.nom.trim(), 
+      isFormValid 
+    })
+  }, [formData.nom, formData.typeClient, isFormValid])
+  
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log('Client data:', formData)
-    // TODO: Implement client creation logic
-    onOpenChange(false)
+    console.log('🚀 Form submitted!', { 
+      isFormValid, 
+      isSubmitting, 
+      user: user?.uid, 
+      formData,
+      isEditMode,
+      editingClient: editingClient?.id 
+    })
+    
+    // Force log pour debug
+    alert('Form submitted! Check console for details')
+    
+    if (!isFormValid) {
+      console.log('❌ Form not valid')
+      toast.error('Veuillez remplir tous les champs obligatoires')
+      return
+    }
+    
+    if (isSubmitting) {
+      console.log('❌ Already submitting')
+      return
+    }
+    
+    if (!user) {
+      console.log('❌ No user')
+      toast.error('Utilisateur non connecté')
+      return
+    }
+
+    setIsSubmitting(true)
+    console.log('🔄 Début de la sauvegarde...', { isEditMode, user: user.uid, formData })
+
+    try {
+      if (isEditMode && editingClient) {
+        console.log('✏️ Mode édition détecté', editingClient.id)
+        
+        // Trouver le document client principal avec uidclient correspondant à l'utilisateur connecté
+        console.log('🔍 Recherche du client principal avec uidclient:', user.uid)
+        
+        const mainClientsQuery = query(
+          collection(db, 'clients'),
+          where('uidclient', '==', user.uid)
+        )
+        const mainClientsSnapshot = await getDocs(mainClientsQuery)
+        
+        if (mainClientsSnapshot.empty) {
+          console.log('❌ Aucun client principal trouvé avec uidclient:', user.uid)
+          toast.error('Aucun profil client principal trouvé pour cet utilisateur')
+          setIsSubmitting(false)
+          return
+        }
+        
+        // Prendre le premier document client principal trouvé
+        const mainClientDoc = mainClientsSnapshot.docs[0]
+        const mainClientId = mainClientDoc.id
+        console.log('✅ Client principal trouvé avec ID:', mainClientId)
+        
+        // Mode édition - mise à jour dans la sous-collection du client principal
+        const clientRef = doc(db, 'clients', mainClientId, 'clients', editingClient.id)
+        const updatedData = {
+          ...formData,
+          dateCreation: editingClient.dateCreation,
+          status: editingClient.status
+        }
+        
+        console.log('📝 Données à mettre à jour:', updatedData)
+        console.log('📍 Mise à jour dans clients/{mainClientId}/clients/{clientId}:', mainClientId, editingClient.id)
+        await updateDoc(clientRef, updatedData)
+        console.log('✅ Client mis à jour avec succès')
+        toast.success('Client modifié avec succès!')
+      } else {
+        console.log('➕ Mode création détecté')
+        
+        // Trouver le document client existant avec uidclient correspondant à l'utilisateur connecté
+        console.log('🔍 Recherche du client existant avec uidclient:', user.uid)
+        
+        const existingClientsQuery = query(
+          collection(db, 'clients'),
+          where('uidclient', '==', user.uid)
+        )
+        const existingClientsSnapshot = await getDocs(existingClientsQuery)
+        
+        if (existingClientsSnapshot.empty) {
+          console.log('❌ Aucun client trouvé avec uidclient:', user.uid)
+          toast.error('Aucun profil client trouvé pour cet utilisateur')
+          setIsSubmitting(false)
+          return
+        }
+        
+        // Prendre le premier document client trouvé
+        const mainClientDoc = existingClientsSnapshot.docs[0]
+        const mainClientId = mainClientDoc.id
+        console.log('✅ Client existant trouvé avec ID:', mainClientId)
+
+        // Mode création - vérification email dans la sous-collection du client existant
+        if (formData.email) {
+          const clientSubcollectionRef = collection(db, 'clients', mainClientId, 'clients')
+          const emailQuery = query(
+            clientSubcollectionRef,
+            where('email', '==', formData.email)
+          )
+          const emailSnapshot = await getDocs(emailQuery)
+          
+          if (!emailSnapshot.empty) {
+            console.log('❌ Email déjà existant')
+            toast.error('Un client avec cet email existe déjà')
+            setIsSubmitting(false)
+            return
+          }
+        }
+        
+        // Créer nouveau client dans la sous-collection du client existant
+        const newClientData = {
+          ...formData,
+          dateCreation: serverTimestamp(),
+          status: 'actif'
+        }
+
+        console.log('📝 Données du nouveau client:', newClientData)
+        console.log('📍 Sauvegarde dans clients/{clientId}/clients:', mainClientId)
+        
+        // Sauvegarder dans clients/{mainClientId}/clients
+        const clientSubcollectionRef = collection(db, 'clients', mainClientId, 'clients')
+        const docRef = await addDoc(clientSubcollectionRef, newClientData)
+        console.log('✅ Client créé avec ID:', docRef.id)
+        toast.success('Client créé avec succès!')
+      }
+      
+      // Reset form and close drawer
+      setFormData(initialFormData)
+      onOpenChange(false)
+    } catch (error) {
+      console.error('❌ Erreur lors de la sauvegarde du client:', error)
+      toast.error(`Erreur lors de la sauvegarde: ${error instanceof Error ? error.message : 'Erreur inconnue'}`)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const handleAddressSelect = (address: string, postalCode: string, city: string) => {
@@ -56,10 +256,12 @@ export function ClientDrawer({ open, onOpenChange }: ClientDrawerProps) {
   }
 
   const resetForm = () => {
+    console.log('🔄 Reset form called')
     setFormData(initialFormData)
   }
 
   const handleCancel = () => {
+    console.log('❌ Cancel clicked')
     resetForm()
     onOpenChange(false)
   }
@@ -76,12 +278,17 @@ export function ClientDrawer({ open, onOpenChange }: ClientDrawerProps) {
         <div className="sticky top-0 z-10 bg-slate-900 border-b border-slate-600 px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <SheetTitle className="text-xl font-semibold text-white">
-                Ajouter un client
-              </SheetTitle>
-              {/* <SheetDescription className="text-sm text-gray-200 mt-1">
-                Créez un nouveau client pour optimiser la gestion de vos factures et devis.
-              </SheetDescription> */}
+              <div>
+                <SheetTitle className="text-xl font-semibold text-white">
+                  {isEditMode ? 'Modifier le client' : 'Ajouter un nouveau client'}
+                </SheetTitle>
+                <SheetDescription>
+                  {isEditMode 
+                    ? 'Modifiez les informations du client.' 
+                    : 'Remplissez les informations du client pour l\'ajouter à votre base de données.'
+                  }
+                </SheetDescription>
+              </div>
             </div>
             <Button
               variant="ghost"
@@ -96,7 +303,10 @@ export function ClientDrawer({ open, onOpenChange }: ClientDrawerProps) {
 
         {/* Contenu du formulaire avec padding */}
         <div className="px-6 py-6">
-          <form onSubmit={handleSubmit} className="space-y-8">
+          <form onSubmit={(e) => {
+          console.log('📋 Form onSubmit triggered!')
+          handleSubmit(e)
+        }} className="space-y-8">
             {/* Le client */}
             <div className="space-y-6 pb-6 border-b border-gray-200 dark:border-gray-700">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Le client</h3>
@@ -105,7 +315,7 @@ export function ClientDrawer({ open, onOpenChange }: ClientDrawerProps) {
               <div className="space-y-3">
                 <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Type de client</Label>
                 <RadioGroup
-                  value={formData.typeClient}
+                  value={formData.typeClient || 'particulier'}
                   onValueChange={(value) => setFormData({ ...formData, typeClient: value })}
                   className="flex flex-col space-y-3"
                 >
@@ -124,7 +334,7 @@ export function ClientDrawer({ open, onOpenChange }: ClientDrawerProps) {
               <div className="space-y-3">
                 <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Localisation du client</Label>
                 <RadioGroup
-                  value={formData.localisation}
+                  value={formData.localisation || 'france'}
                   onValueChange={(value) => setFormData({ ...formData, localisation: value })}
                   className="flex flex-col space-y-3"
                 >
@@ -148,7 +358,7 @@ export function ClientDrawer({ open, onOpenChange }: ClientDrawerProps) {
               <div className="space-y-3">
                 <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Genre</Label>
                 <RadioGroup
-                  value={formData.genre}
+                  value={formData.genre || 'non-specifie'}
                   onValueChange={(value) => setFormData({ ...formData, genre: value })}
                   className="flex flex-col space-y-3"
                 >
@@ -168,32 +378,56 @@ export function ClientDrawer({ open, onOpenChange }: ClientDrawerProps) {
               </div>
 
               <div className="grid grid-cols-1 gap-4">
-                {/* Nom de famille */}
-                <div className="space-y-2">
-                  <Label htmlFor="nom" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Nom de famille <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="nom"
-                    placeholder="Entrer le nom de famille du client"
-                    value={formData.nom}
-                    onChange={(e) => setFormData({ ...formData, nom: e.target.value })}
-                    required
-                    className="h-11"
-                  />
-                </div>
+                {/* Nom (si particulier) */}
+                {formData.typeClient === 'particulier' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="nom" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Nom <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="nom"
+                      value={formData.nom}
+                      onChange={(e) => {
+                        console.log('✏️ Nom changed:', e.target.value)
+                        setFormData({ ...formData, nom: e.target.value })
+                      }}
+                      placeholder="Nom du client"
+                      className="h-11"
+                    />
+                  </div>
+                )}
+
+                {/* Nom de l'entreprise (si entreprise) */}
+                {formData.typeClient === 'entreprise' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="nomEntreprise" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Nom de l'entreprise <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="nomEntreprise"
+                      placeholder="Entrer le nom de l'entreprise"
+                      value={formData.nomEntreprise}
+                      onChange={(e) => {
+                        console.log('✏️ Nom entreprise changed:', e.target.value)
+                        setFormData({ ...formData, nomEntreprise: e.target.value })
+                      }}
+                      required
+                      className="h-11"
+                    />
+                  </div>
+                )}
+
 
                 {/* Prénom */}
                 <div className="space-y-2">
                   <Label htmlFor="prenom" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Prénom <span className="text-red-500">*</span>
+                    Prénom
                   </Label>
                   <Input
                     id="prenom"
                     placeholder="Entrer le prénom du client"
                     value={formData.prenom}
                     onChange={(e) => setFormData({ ...formData, prenom: e.target.value })}
-                    required
                     className="h-11"
                   />
                 </div>
@@ -315,11 +549,19 @@ export function ClientDrawer({ open, onOpenChange }: ClientDrawerProps) {
               Annuler
             </Button>
             <Button
-              type="submit"
-              onClick={handleSubmit}
-              className="bg-blue-600 hover:bg-blue-700 px-6"
+              type="button"
+              disabled={!isFormValid || isSubmitting}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={(e) => {
+                console.log('🔘 Button clicked directly!', { disabled: !isFormValid || isSubmitting, isFormValid, isSubmitting })
+                e.preventDefault()
+                handleSubmit(e as any)
+              }}
             >
-              Ajouter
+              {isSubmitting 
+                ? (isEditMode ? 'Modification en cours...' : 'Ajout en cours...') 
+                : (isEditMode ? 'Modifier le client' : 'Ajouter le client')
+              }
             </Button>
           </div>
         </div>
