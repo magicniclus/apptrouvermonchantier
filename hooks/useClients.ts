@@ -33,7 +33,7 @@ export function useClients() {
   useEffect(() => {
     if (!user) {
       setClients([])
-      setLoading(false)
+      setLoading(true) // Keep loading true until we have a user
       return
     }
 
