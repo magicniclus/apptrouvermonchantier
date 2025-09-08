@@ -171,7 +171,7 @@ export function AppSidebar() {
               className="h-auto p-3"
             >
               <a href="/dashboard/parametre" className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 text-white font-semibold text-sm shadow-md">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold">
                   {clientData?.prenom?.charAt(0)?.toUpperCase()}{clientData?.nom?.charAt(0)?.toUpperCase()}
                 </div>
                 <div className="flex flex-col items-start min-w-0 flex-1">
