@@ -57,24 +57,53 @@ export async function POST(request: NextRequest) {
     const clientId = clientDoc.id
     console.log('Client principal trouvé:', clientId)
 
-    // Créer l'utilisateur dans la sous-collection users du client
-    console.log('Création de l\'utilisateur dans la sous-collection users...')
+    // Vérifier s'il existe déjà un utilisateur avec cet email dans la sous-collection
+    console.log('Vérification utilisateur existant avec email:', pendingUserData.email)
     const usersRef = collection(db, `clients/${clientId}/users`)
-    const newUserData = {
-      nom: pendingUserData.nom,
-      prenom: pendingUserData.prenom,
-      email: pendingUserData.email,
-      role: pendingUserData.role,
-      status: 'active',
-      uid: uid,
-      isPrimary: false,
-      dateCreation: new Date(),
-      dateActivation: new Date()
-    }
-    console.log('Données utilisateur à créer:', newUserData)
+    const existingUserQuery = query(usersRef, where('email', '==', pendingUserData.email))
+    const existingUserSnapshot = await getDocs(existingUserQuery)
     
-    const userDocRef = await addDoc(usersRef, newUserData)
-    console.log('Utilisateur créé avec ID:', userDocRef.id)
+    if (!existingUserSnapshot.empty) {
+      // Utilisateur existant trouvé - mettre à jour avec le nouvel UID
+      console.log('Utilisateur existant trouvé, mise à jour avec nouvel UID...')
+      const existingUserDoc = existingUserSnapshot.docs[0]
+      const existingUserData = existingUserDoc.data()
+      console.log('Données utilisateur existant:', existingUserData)
+      
+      // Fusionner les données existantes avec les nouvelles données
+      const updatedUserData = {
+        ...existingUserData, // Garder toutes les données existantes
+        nom: pendingUserData.nom, // Mettre à jour avec les données de l'invitation
+        prenom: pendingUserData.prenom,
+        role: pendingUserData.role,
+        status: 'active',
+        uid: uid, // Ajouter le nouvel UID Firebase Auth
+        dateActivation: new Date() // Mettre à jour la date d'activation
+      }
+      console.log('Données utilisateur mises à jour:', updatedUserData)
+      
+      // Mettre à jour l'utilisateur existant
+      await updateDoc(existingUserDoc.ref, updatedUserData)
+      console.log('Utilisateur existant mis à jour avec UID:', uid)
+    } else {
+      // Pas d'utilisateur existant - créer un nouveau
+      console.log('Aucun utilisateur existant, création d\'un nouveau...')
+      const newUserData = {
+        nom: pendingUserData.nom,
+        prenom: pendingUserData.prenom,
+        email: pendingUserData.email,
+        role: pendingUserData.role,
+        status: 'active',
+        uid: uid,
+        isPrimary: false,
+        dateCreation: new Date(),
+        dateActivation: new Date()
+      }
+      console.log('Données utilisateur à créer:', newUserData)
+      
+      const userDocRef = await addDoc(usersRef, newUserData)
+      console.log('Nouvel utilisateur créé avec ID:', userDocRef.id)
+    }
 
     // Supprimer l'utilisateur pending
     console.log('Suppression de l\'utilisateur pending...')
