@@ -43,19 +43,51 @@ export default function LoginPage() {
       const querySnapshot = await getDocs(q)
       
       if (!querySnapshot.empty) {
-        // Document trouvé avec uidClient correspondant
+        // Document trouvé avec uidClient correspondant (client principal)
         const clientDoc = querySnapshot.docs[0]
         const clientData = clientDoc.data()
         
-        console.log('Document client trouvé:', { id: clientDoc.id, data: clientData })
+        console.log('Document client principal trouvé:', { id: clientDoc.id, data: clientData })
         console.log('Connexion réussie:', { uid: user.uid, clientData })
         
         // Redirection vers le dashboard
         router.push('/dashboard')
       } else {
-        console.log('Aucun document trouvé avec uidClient:', user.uid)
-        setError('Aucun profil client trouvé pour ce compte.')
-        await auth.signOut()
+        // Pas trouvé comme client principal, chercher dans les sous-comptes
+        console.log('Recherche dans les sous-comptes pour UID:', user.uid)
+        
+        const allClientsSnapshot = await getDocs(collection(db, 'clients'))
+        console.log('Nombre de clients principaux:', allClientsSnapshot.size)
+        
+        let found = false
+        for (const clientDoc of allClientsSnapshot.docs) {
+          console.log('Vérification client:', clientDoc.id)
+          
+          // Chercher dans la sous-collection users de chaque client
+          const usersRef = collection(db, `clients/${clientDoc.id}/users`)
+          const userQuery = query(usersRef, where('uid', '==', user.uid))
+          const userSnapshot = await getDocs(userQuery)
+          
+          console.log(`Sous-comptes trouvés dans ${clientDoc.id}:`, userSnapshot.size)
+          
+          if (!userSnapshot.empty) {
+            // Sous-compte trouvé
+            console.log('Sous-compte trouvé dans le client:', clientDoc.id)
+            const userData = userSnapshot.docs[0].data()
+            console.log('Données utilisateur:', userData)
+            
+            // Redirection vers le dashboard
+            router.push('/dashboard')
+            found = true
+            break
+          }
+        }
+        
+        if (!found) {
+          console.log('ERREUR: Aucun sous-compte trouvé pour cet UID')
+          setError('Aucun profil client trouvé pour ce compte.')
+          await auth.signOut()
+        }
       }
     } catch (error: unknown) {
       console.error('Erreur de connexion:', error)

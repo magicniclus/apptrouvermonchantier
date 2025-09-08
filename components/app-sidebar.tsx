@@ -21,14 +21,24 @@ import { useAuth } from "@/hooks/useAuth"
 import { useProjects } from "@/hooks/useProjects"
 import { auth } from "@/lib/firebase"
 import { signOut } from "firebase/auth"
-import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useRouter, usePathname } from "next/navigation"
+import { useState, useEffect } from "react"
 
 export function AppSidebar() {
   const { clientData } = useAuth()
   const { projects } = useProjects(clientData?.id || null)
   const router = useRouter()
-  const [isFacturationOpen, setIsFacturationOpen] = useState(false)
+  const pathname = usePathname()
+  
+  // Auto-expand Facturation menu when on related pages
+  const facturationPages = ["/registre", "/facturation/factures", "/facturation/devis", "/dashboard/clients"]
+  const shouldExpandFacturation = facturationPages.some(page => pathname === page)
+  const [isFacturationOpen, setIsFacturationOpen] = useState(shouldExpandFacturation)
+  
+  // Update facturation menu state when pathname changes
+  useEffect(() => {
+    setIsFacturationOpen(shouldExpandFacturation)
+  }, [shouldExpandFacturation])
 
   const handleLogout = async () => {
     try {
@@ -44,7 +54,7 @@ export function AppSidebar() {
       title: "Dashboard",
       url: "/dashboard",
       icon: Home,
-      isActive: true,
+      isActive: pathname === "/dashboard",
     },
     ...(clientData?.siteInternetClient ? [{
       title: "Mon site",
@@ -52,6 +62,7 @@ export function AppSidebar() {
       icon: Globe,
       onClick: () => window.open(clientData.siteInternetClient, '_blank'),
       hasExternalIcon: true,
+      isActive: false,
     }] : []),
   ]
 
@@ -63,7 +74,7 @@ export function AppSidebar() {
         <div className="flex items-center gap-3 p-2">
           <img src="/favicon.png" alt="Logo" className="w-8 h-8" />
           <div className="flex flex-col">
-            <span className="font-semibold text-sidebar-foreground">Dashboard</span>
+            <span className="font-semibold text-sidebar-foreground">Trouver-Mon-Chantier</span>
             <span className="text-xs text-sidebar-foreground/70">
               {clientData.prenom} {clientData.nom}
             </span>
@@ -119,28 +130,28 @@ export function AppSidebar() {
                 {isFacturationOpen && (
                   <SidebarMenuSub>
                     <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild>
+                      <SidebarMenuSubButton asChild isActive={pathname === "/registre"}>
                         <a href="/registre">
                           <span>Registre</span>
                         </a>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
                     <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild>
+                      <SidebarMenuSubButton asChild isActive={pathname === "/facturation/factures"}>
                         <a href="/facturation/factures">
                           <span>Factures</span>
                         </a>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
                     <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild>
+                      <SidebarMenuSubButton asChild isActive={pathname === "/facturation/devis"}>
                         <a href="/facturation/devis">
                           <span>Devis</span>
                         </a>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
                     <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild>
+                      <SidebarMenuSubButton asChild isActive={pathname === "/dashboard/clients"}>
                         <a href="/dashboard/clients">
                           <span>Clients</span>
                         </a>
@@ -158,7 +169,7 @@ export function AppSidebar() {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild>
+            <SidebarMenuButton asChild isActive={pathname === "/dashboard/parametre"}>
               <a href="/dashboard/parametre">
                 <Settings />
                 <span>Paramètres</span>

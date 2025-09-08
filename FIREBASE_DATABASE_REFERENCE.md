@@ -1,5 +1,27 @@
 # Firebase Database Structure Reference
 
+## Firebase Security Rules
+
+### Required Firestore Rules
+Add these rules to your Firebase Console > Firestore Database > Rules:
+
+```javascript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow read/write access to pendingUsers collection for invitation system
+    match /pendingUsers/{document} {
+      allow read, write: if true;
+    }
+    
+    // Existing rules for other collections
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
+```
+
 ## Current Database Structure
 
 ### 1. Collection: `onboarding`
@@ -119,23 +141,121 @@ clients/{mainClientId} (Client principal avec uidclient = user.uid)
 ├── typeSite: string ("99€")
 ├── uidclient: string (CLEF D'IDENTIFICATION - doit correspondre à l'ID utilisateur connecté)
 ├── ville: string
-└── clients/ (SOUS-COLLECTION des clients gérés par ce client principal)
-    └── {clientId}
-        ├── typeClient: string ("particulier" | "entreprise")
-        ├── localisation: string ("france" | "international")
-        ├── genre: string ("madame" | "monsieur" | "non-specifie")
-        ├── nom: string (obligatoire si typeClient = "particulier")
-        ├── prenom: string
-        ├── nomEntreprise: string (obligatoire si typeClient = "entreprise")
-        ├── email: string
-        ├── telephone: string
-        ├── adresse: string
-        ├── complementAdresse: string
-        ├── codePostal: string
-        ├── ville: string
-        ├── commentaires: string
-        ├── dateCreation: timestamp
-        └── status: string ("actif")
+├── clients/ (SOUS-COLLECTION des clients gérés par ce client principal)
+│   └── {clientId}
+│       ├── typeClient: string ("particulier" | "entreprise")
+│       ├── localisation: string ("france" | "international")
+│       ├── genre: string ("madame" | "monsieur" | "non-specifie")
+│       ├── nom: string (obligatoire si typeClient = "particulier")
+│       ├── prenom: string
+│       ├── nomEntreprise: string (obligatoire si typeClient = "entreprise")
+│       ├── email: string
+│       ├── telephone: string
+│       ├── adresse: string
+│       ├── complementAdresse: string
+│       ├── codePostal: string
+│       ├── ville: string
+│       ├── commentaires: string
+│       ├── dateCreation: timestamp
+│       └── status: string ("actif")
+├── users/ (SOUS-COLLECTION des utilisateurs avec droits d'accès)
+│   └── {userId}
+│       ├── email: string
+│       ├── nom: string
+│       ├── prenom: string
+│       ├── role: string ("admin" | "user" | "viewer")
+│       ├── dateCreation: timestamp
+│       ├── dateInvitation: timestamp
+│       ├── status: string ("active" | "inactive" | "pending")
+│       ├── invitePar: string (userId de l'invitant)
+│       ├── derniereConnexion: timestamp
+│       └── permissions: {
+│           ├── clients: {
+│           │   ├── create: boolean
+│           │   ├── read: boolean
+│           │   ├── update: boolean
+│           │   └── delete: boolean
+│           │   }
+│           ├── projects: {
+│           │   ├── create: boolean
+│           │   ├── read: boolean
+│           │   ├── update: boolean
+│           │   └── delete: boolean
+│           │   }
+│           ├── factures: {
+│           │   ├── create: boolean
+│           │   ├── read: boolean
+│           │   ├── update: boolean
+│           │   └── delete: boolean
+│           │   }
+│           ├── devis: {
+│           │   ├── create: boolean
+│           │   ├── read: boolean
+│           │   ├── update: boolean
+│           │   └── delete: boolean
+│           │   }
+│           └── settings: {
+│               ├── company: boolean
+│               ├── users: boolean
+│               └── billing: boolean
+│               }
+│           }
+└── companyInfo/ (INFORMATIONS ENTREPRISE - Document unique)
+    ├── siret: string
+    ├── formeJuridique: string ("SARL" | "SAS" | "EURL" | "Auto-entrepreneur" | "Autre")
+    ├── codeAPE: string
+    ├── capital: number
+    ├── adresseSiege: {
+    │   ├── adresse: string
+    │   ├── complementAdresse: string
+    │   ├── codePostal: string
+    │   └── ville: string
+    │   }
+    ├── dateCreationEntreprise: timestamp
+    ├── numeroTVA: string
+    ├── rcs: string (Registre du Commerce et des Sociétés)
+    ├── dirigeant: {
+    │   ├── nom: string
+    │   ├── prenom: string
+    │   ├── fonction: string
+    │   └── dateNaissance: timestamp
+    │   }
+    ├── comptabilite: {
+    │   ├── exerciceComptable: {
+    │   │   ├── debut: string ("01/01" format)
+    │   │   └── fin: string ("31/12" format)
+    │   │   }
+    │   ├── expertComptable: {
+    │   │   ├── nom: string
+    │   │   ├── cabinet: string
+    │   │   ├── email: string
+    │   │   └── telephone: string
+    │   │   }
+    │   └── logicielComptable: string
+    │   }
+    ├── banque: {
+    │   ├── nom: string
+    │   ├── iban: string
+    │   ├── bic: string
+    │   └── titulaire: string
+    │   }
+    ├── assurances: {
+    │   ├── responsabiliteCivile: {
+    │   │   ├── compagnie: string
+    │   │   ├── numeroPolice: string
+    │   │   ├── dateExpiration: timestamp
+    │   │   └── montantGarantie: number
+    │   │   }
+    │   └── decennale: {
+    │       ├── compagnie: string
+    │       ├── numeroPolice: string
+    │       ├── dateExpiration: timestamp
+    │       └── montantGarantie: number
+    │       }
+    │   }
+    ├── logo: string (URL Firebase Storage)
+    ├── dateModification: timestamp
+    └── modifiePar: string (userId)
 ```
 
 ### 3. Collection: `projects` (Projets existants)
@@ -466,20 +586,173 @@ const clientsSnapshot = await getDocs(clientsRef)
 - `articles`: `categorie`, `actif`, `code`
 - `projects`: `uid`, `status`, `dateCreation`
 
-## Sécurité Firebase Rules
+## Système de Droits d'Accès et Rôles
+
+### Rôles Utilisateurs
+
+**ADMIN** (Propriétaire de l'entreprise)
+- Accès complet à toutes les fonctionnalités
+- Gestion des utilisateurs (ajout, suppression, modification des rôles)
+- Modification des informations entreprise
+- Accès aux paramètres de facturation et configuration
+- Permissions: ALL (create, read, update, delete sur toutes les collections)
+
+**USER** (Employé avec droits étendus)
+- Gestion complète des clients et projets
+- Création et modification des devis/factures
+- Lecture des informations entreprise (sans modification)
+- Pas d'accès à la gestion des utilisateurs
+- Permissions: CRUD sur clients, projects, factures, devis | READ sur company settings
+
+**VIEWER** (Consultation uniquement)
+- Lecture seule des clients et projets
+- Consultation des devis/factures existants
+- Aucun droit de création ou modification
+- Permissions: READ ONLY sur clients, projects, factures, devis
+
+### Logique de Vérification des Permissions
 
 ```javascript
-// Exemple de règles pour la collection factures
-match /factures/{factureId} {
-  allow read, write: if request.auth != null 
-    && request.auth.uid == resource.data.clientId;
+// Fonction utilitaire pour vérifier les permissions
+async function checkUserPermission(userId, mainClientId, action, resource) {
+  const userRef = doc(db, 'clients', mainClientId, 'users', userId)
+  const userDoc = await getDoc(userRef)
+  
+  if (!userDoc.exists()) {
+    return false // Utilisateur non trouvé
+  }
+  
+  const userData = userDoc.data()
+  if (userData.status !== 'active') {
+    return false // Utilisateur inactif
+  }
+  
+  const permissions = userData.permissions[resource]
+  return permissions && permissions[action] === true
 }
 
-// Exemple de règles pour la collection articles
-match /articles/{articleId} {
-  allow read, write: if request.auth != null;
+// Exemple d'utilisation
+const canCreateClient = await checkUserPermission(
+  user.uid, 
+  mainClientId, 
+  'create', 
+  'clients'
+)
+```
+
+### Règles de Sécurité Firebase
+
+```javascript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Fonction pour vérifier si l'utilisateur appartient au client principal
+    function isAuthorizedUser(mainClientId) {
+      return request.auth != null && 
+        exists(/databases/$(database)/documents/clients/$(mainClientId)/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/clients/$(mainClientId)/users/$(request.auth.uid)).data.status == 'active';
+    }
+    
+    // Fonction pour vérifier les permissions spécifiques
+    function hasPermission(mainClientId, resource, action) {
+      let userDoc = get(/databases/$(database)/documents/clients/$(mainClientId)/users/$(request.auth.uid));
+      return userDoc.data.permissions[resource][action] == true;
+    }
+    
+    // Collection clients principale
+    match /clients/{mainClientId} {
+      allow read: if isAuthorizedUser(mainClientId);
+      allow write: if isAuthorizedUser(mainClientId) && 
+        hasPermission(mainClientId, 'settings', 'company');
+      
+      // Sous-collection clients
+      match /clients/{clientId} {
+        allow read: if isAuthorizedUser(mainClientId) && 
+          hasPermission(mainClientId, 'clients', 'read');
+        allow create: if isAuthorizedUser(mainClientId) && 
+          hasPermission(mainClientId, 'clients', 'create');
+        allow update: if isAuthorizedUser(mainClientId) && 
+          hasPermission(mainClientId, 'clients', 'update');
+        allow delete: if isAuthorizedUser(mainClientId) && 
+          hasPermission(mainClientId, 'clients', 'delete');
+      }
+      
+      // Sous-collection users (gestion des utilisateurs)
+      match /users/{userId} {
+        allow read: if isAuthorizedUser(mainClientId);
+        allow write: if isAuthorizedUser(mainClientId) && 
+          hasPermission(mainClientId, 'settings', 'users');
+      }
+      
+      // Informations entreprise
+      match /companyInfo {
+        allow read: if isAuthorizedUser(mainClientId);
+        allow write: if isAuthorizedUser(mainClientId) && 
+          hasPermission(mainClientId, 'settings', 'company');
+      }
+    }
+    
+    // Collection projects
+    match /projects/{projectId} {
+      allow read: if request.auth != null && 
+        request.auth.uid == resource.data.uid &&
+        hasPermission(resource.data.uid, 'projects', 'read');
+      allow create: if request.auth != null && 
+        hasPermission(request.auth.uid, 'projects', 'create');
+      allow update: if request.auth != null && 
+        request.auth.uid == resource.data.uid &&
+        hasPermission(resource.data.uid, 'projects', 'update');
+      allow delete: if request.auth != null && 
+        request.auth.uid == resource.data.uid &&
+        hasPermission(resource.data.uid, 'projects', 'delete');
+    }
+    
+    // Collection factures
+    match /factures/{factureId} {
+      allow read: if request.auth != null && 
+        hasPermission(request.auth.uid, 'factures', 'read');
+      allow create: if request.auth != null && 
+        hasPermission(request.auth.uid, 'factures', 'create');
+      allow update: if request.auth != null && 
+        hasPermission(request.auth.uid, 'factures', 'update');
+      allow delete: if request.auth != null && 
+        hasPermission(request.auth.uid, 'factures', 'delete');
+    }
+    
+    // Collection devis
+    match /devis/{devisId} {
+      allow read: if request.auth != null && 
+        hasPermission(request.auth.uid, 'devis', 'read');
+      allow create: if request.auth != null && 
+        hasPermission(request.auth.uid, 'devis', 'create');
+      allow update: if request.auth != null && 
+        hasPermission(request.auth.uid, 'devis', 'update');
+      allow delete: if request.auth != null && 
+        hasPermission(request.auth.uid, 'devis', 'delete');
+    }
+  }
 }
 ```
+
+### Workflow de Gestion des Utilisateurs
+
+**Ajout d'un nouvel utilisateur:**
+1. Admin invite un utilisateur par email
+2. Création du document dans `clients/{mainClientId}/users/{userId}` avec status "pending"
+3. Envoi d'email d'invitation avec lien d'activation
+4. L'utilisateur clique sur le lien et crée son compte Firebase Auth
+5. Status passe à "active" et l'utilisateur peut accéder à l'application
+
+**Modification des permissions:**
+1. Seuls les ADMIN peuvent modifier les rôles et permissions
+2. Mise à jour du document utilisateur avec nouvelles permissions
+3. Les changements prennent effet immédiatement
+
+**Suppression d'un utilisateur:**
+1. Status passe à "inactive" (soft delete)
+2. L'utilisateur perd immédiatement l'accès
+3. Possibilité de réactiver plus tard si nécessaire
 
 ## Notes d'implémentation
 

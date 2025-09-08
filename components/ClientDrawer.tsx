@@ -646,17 +646,17 @@ export function ClientDrawer({ open, onOpenChange, editingClient }: ClientDrawer
           <DialogTitle>Confirmer la suppression</DialogTitle>
           <DialogDescription>
             Êtes-vous sûr de vouloir supprimer ce client ? Cette action est irréversible.
-            {editingClient && (
-              <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
-                <span className="font-medium">
-                  {editingClient.typeClient === 'entreprise' 
-                    ? editingClient.nomEntreprise 
-                    : `${editingClient.nom} ${editingClient.prenom}`
-                  }
-                </span>
-              </div>
-            )}
           </DialogDescription>
+          {editingClient && (
+            <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
+              <span className="font-medium">
+                {editingClient.typeClient === 'entreprise' 
+                  ? editingClient.nomEntreprise 
+                  : `${editingClient.nom} ${editingClient.prenom}`
+                }
+              </span>
+            </div>
+          )}
         </DialogHeader>
         <DialogFooter>
           <Button
