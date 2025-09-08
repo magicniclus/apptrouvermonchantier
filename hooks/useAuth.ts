@@ -15,9 +15,21 @@ interface ClientData {
   [key: string]: any
 }
 
+interface UserData {
+  id: string
+  nom: string
+  prenom: string
+  email: string
+  role: string
+  uid: string
+  isPrimary?: boolean
+  [key: string]: any
+}
+
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null)
   const [clientData, setClientData] = useState<ClientData | null>(null)
+  const [userData, setUserData] = useState<UserData | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -35,10 +47,22 @@ export function useAuth() {
           if (!querySnapshot.empty) {
             // Client principal trouvé
             const clientDoc = querySnapshot.docs[0]
+            const clientDataFromDoc = clientDoc.data()
             setClientData({
               id: clientDoc.id,
-              ...clientDoc.data()
+              ...clientDataFromDoc
             } as ClientData)
+            
+            // Pour un client principal, créer userData à partir des données client
+            setUserData({
+              id: clientDoc.id,
+              nom: clientDataFromDoc.nom || '',
+              prenom: clientDataFromDoc.prenom || '',
+              email: clientDataFromDoc.email || '',
+              role: 'admin',
+              uid: user.uid,
+              isPrimary: true
+            } as UserData)
           } else {
             // Pas trouvé comme client principal, chercher dans les sous-comptes
             console.log('Recherche dans les sous-comptes pour UID:', user.uid)
@@ -59,15 +83,30 @@ export function useAuth() {
               console.log(`Sous-comptes trouvés dans ${clientDoc.id}:`, userSnapshot.size)
               
               if (!userSnapshot.empty) {
-                // Sous-compte trouvé, utiliser les données du client principal
+                // Sous-compte trouvé
                 console.log('Sous-compte trouvé dans le client:', clientDoc.id)
-                const userData = userSnapshot.docs[0].data()
-                console.log('Données utilisateur:', userData)
+                const userDocData = userSnapshot.docs[0].data()
+                const userDocId = userSnapshot.docs[0].id
+                console.log('Données utilisateur:', userDocData)
                 
+                // Définir les données du client principal
                 setClientData({
                   id: clientDoc.id,
                   ...clientDoc.data()
                 } as ClientData)
+                
+                // Définir les données de l'utilisateur sous-compte
+                setUserData({
+                  id: userDocId,
+                  nom: userDocData.nom || '',
+                  prenom: userDocData.prenom || '',
+                  email: userDocData.email || '',
+                  role: userDocData.role || 'user',
+                  uid: user.uid,
+                  isPrimary: userDocData.isPrimary || false,
+                  ...userDocData
+                } as UserData)
+                
                 found = true
                 break
               }
@@ -83,6 +122,7 @@ export function useAuth() {
       } else {
         setUser(null)
         setClientData(null)
+        setUserData(null)
       }
       setLoading(false)
     })
@@ -90,5 +130,5 @@ export function useAuth() {
     return () => unsubscribe()
   }, [])
 
-  return { user, clientData, loading }
+  return { user, clientData, userData, loading }
 }
