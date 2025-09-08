@@ -13,7 +13,140 @@ service cloud.firestore {
     match /{document=**} {
       allow read, write: if true;
     }
+    
+    // Collections spécifiques pour le système d'invitation
+    match /pendingUsers/{document} {
+      allow read, write: if true;
+    }
+    
+    match /usersToDelete/{document} {
+      allow read, write: if true;
+    }
   }
+}
+```
+
+## Système d'Invitation et Gestion des Utilisateurs
+
+### SendGrid Email Invitation System
+
+Le système d'invitation utilise SendGrid pour envoyer des emails professionnels avec des liens sécurisés.
+
+**Configuration requise:**
+- Variable d'environnement `SENDGRID_API_KEY`
+- Email expéditeur: `service@trouver-mon-chantier.fr`
+- Tokens sécurisés avec expiration 24h
+
+**APIs disponibles:**
+- `POST /api/send-invitation` - Envoi d'invitation par email
+- `POST /api/validate-token` - Validation du token d'invitation
+- `POST /api/activate-user` - Activation de l'utilisateur après création du mot de passe
+- `POST /api/delete-user` - Suppression utilisateur (Firestore + Firebase Auth)
+
+### Flux d'Invitation Complet
+
+1. **Envoi d'invitation** (`/api/send-invitation`)
+   - Génération token sécurisé (crypto.randomBytes)
+   - Sauvegarde dans collection `pendingUsers`
+   - Envoi email HTML professionnel via SendGrid
+   - Token expire après 24h
+
+2. **Validation du lien** (`/api/validate-token`)
+   - Vérification token dans `pendingUsers`
+   - Contrôle expiration (24h)
+   - Retour données utilisateur si valide
+
+3. **Création mot de passe** (`/creation-mot-de-passe`)
+   - Interface utilisateur avec validation mot de passe
+   - Création compte Firebase Auth
+   - Appel API activation
+
+4. **Activation utilisateur** (`/api/activate-user`)
+   - Recherche utilisateur existant par email
+   - **Fusion intelligente** : mise à jour avec nouvel UID Firebase si utilisateur existe
+   - **Création** : nouveau document si utilisateur n'existe pas
+   - Suppression du `pendingUser`
+   - Sauvegarde dans `clients/{clientId}/users/{userId}`
+
+### Gestion des Sous-Comptes
+
+**Structure des données utilisateur:**
+```javascript
+clients/{clientId}/users/{userId} {
+  nom: string,
+  prenom: string,
+  email: string,
+  role: string, // "admin" | "user" | "viewer"
+  uid: string, // UID Firebase Auth (CRITIQUE pour login)
+  status: string, // "active" | "inactive" | "pending"
+  isPrimary: boolean, // false pour sous-comptes
+  dateCreation: timestamp,
+  dateActivation: timestamp,
+  permissions: {
+    clients: { create: boolean, read: boolean, update: boolean, delete: boolean },
+    projects: { create: boolean, read: boolean, update: boolean, delete: boolean },
+    factures: { create: boolean, read: boolean, update: boolean, delete: boolean },
+    devis: { create: boolean, read: boolean, update: boolean, delete: boolean },
+    settings: { company: boolean, users: boolean, billing: boolean }
+  }
+}
+```
+
+**Authentification et Login:**
+- Hook `useAuth` modifié pour supporter les sous-comptes
+- Recherche d'abord dans `clients` (utilisateurs principaux)
+- Si non trouvé, recherche dans toutes les sous-collections `users`
+- Retourne `clientData` (données entreprise) + `userData` (données utilisateur spécifiques)
+
+**Gestion des paramètres personnels:**
+- Utilise `userData` pour afficher les informations de l'utilisateur connecté
+- Sauvegarde différenciée :
+  - Client principal → document `clients/{clientId}`
+  - Sous-compte → document `clients/{clientId}/users/{userId}`
+
+### Suppression d'Utilisateurs
+
+**API `/api/delete-user`:**
+- Suppression document Firestore dans sous-collection `users`
+- Ajout UID dans collection `usersToDelete` pour traçabilité
+- Tentative suppression Firebase Auth (si Admin SDK configuré)
+- Gestion d'erreurs complète avec logs détaillés
+
+**Processus de suppression:**
+1. Validation permissions (seuls admins)
+2. Suppression document Firestore
+3. Ajout dans `usersToDelete` pour audit
+4. Suppression Firebase Auth (optionnel)
+5. Notification utilisateur (toast)
+
+### Collections Spéciales
+
+**pendingUsers** - Invitations en attente
+```javascript
+pendingUsers/{tokenId} {
+  email: string,
+  nom: string,
+  prenom: string,
+  role: string,
+  clientId: string,
+  token: string,
+  expiresAt: timestamp,
+  createdAt: timestamp,
+  invitedBy: string
+}
+```
+
+**usersToDelete** - Audit des suppressions
+```javascript
+usersToDelete/{userId} {
+  originalUid: string,
+  email: string,
+  nom: string,
+  prenom: string,
+  clientId: string,
+  deletedAt: timestamp,
+  deletedBy: string,
+  reason: string
 }
 ```
 
