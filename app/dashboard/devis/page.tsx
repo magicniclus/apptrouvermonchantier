@@ -158,7 +158,7 @@ export default function DevisPage() {
                     size="lg"
                     onClick={() => {/* TODO: Open devis creation modal */}}
                   >
-                    <a href="/dashboard/devis/nouveau" className="flex items-center" >
+                    <a href="/dashboard/devis/nouveau" className="flex items-center cursor-pointer" >
                     <Plus className="w-5 h-5 mr-2" />
                     Créer un nouveau devis
                     </a>
@@ -192,7 +192,7 @@ export default function DevisPage() {
                   <option value="expire">Expiré</option>
                   <option value="facture">Facturé</option>
                 </select>
-                <Button asChild>
+                <Button asChild className="cursor-pointer">
                   <a href="/dashboard/devis/nouveau">
                     <Plus className="w-4 h-4 mr-2" />
                     Nouveau devis
