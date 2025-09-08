@@ -130,24 +130,27 @@ export function AppSidebar() {
                 {isFacturationOpen && (
                   <SidebarMenuSub>
                     <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={pathname === "/dashboard/factures"}>
-                        <a href="/dashboard/factures">
-                          <span>Factures</span>
-                        </a>
+                      <SidebarMenuSubButton 
+                        isActive={pathname === "/dashboard/factures"}
+                        onClick={() => router.push("/dashboard/factures")}
+                      >
+                        <span>Factures</span>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
                     <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={pathname === "/dashboard/devis"}>
-                        <a href="/dashboard/devis">
-                          <span>Devis</span>
-                        </a>
+                      <SidebarMenuSubButton 
+                        isActive={pathname === "/dashboard/devis"}
+                        onClick={() => router.push("/dashboard/devis")}
+                      >
+                        <span>Devis</span>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
                     <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={pathname === "/dashboard/clients"}>
-                        <a href="/dashboard/clients">
-                          <span>Clients</span>
-                        </a>
+                      <SidebarMenuSubButton 
+                        isActive={pathname === "/dashboard/clients"}
+                        onClick={() => router.push("/dashboard/clients")}
+                      >
+                        <span>Clients</span>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
                   </SidebarMenuSub>
