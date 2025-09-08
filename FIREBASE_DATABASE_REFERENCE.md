@@ -38,10 +38,16 @@ onboarding/{clientId}/data
 ```
 
 ### 2. Collection: `clients`
-Structure principale des données clients.
+Structure principale des données clients avec sous-collections.
+
+**LOGIQUE D'ATTRIBUTION DES CLIENTS:**
+Pour toute opération sur les clients (création, modification, lecture), suivre cette logique :
+1. Rechercher dans `clients` le document où `uidclient` correspond à l'ID de l'utilisateur connecté
+2. Si trouvé, utiliser ce document comme "client principal" 
+3. Effectuer les opérations dans la sous-collection `clients` de ce document principal
 
 ```
-clients/{clientId}
+clients/{mainClientId} (Client principal avec uidclient = user.uid)
 ├── DateConversionClient: timestamp
 ├── StatutClient: string ("Actif")
 ├── adresseEntreprise: string
@@ -111,8 +117,25 @@ clients/{clientId}
 ├── telephone: string
 ├── typeAbonnement: string ("29€/mois")
 ├── typeSite: string ("99€")
-├── uidclient: string
-└── ville: string
+├── uidclient: string (CLEF D'IDENTIFICATION - doit correspondre à l'ID utilisateur connecté)
+├── ville: string
+└── clients/ (SOUS-COLLECTION des clients gérés par ce client principal)
+    └── {clientId}
+        ├── typeClient: string ("particulier" | "entreprise")
+        ├── localisation: string ("france" | "international")
+        ├── genre: string ("madame" | "monsieur" | "non-specifie")
+        ├── nom: string (obligatoire si typeClient = "particulier")
+        ├── prenom: string
+        ├── nomEntreprise: string (obligatoire si typeClient = "entreprise")
+        ├── email: string
+        ├── telephone: string
+        ├── adresse: string
+        ├── complementAdresse: string
+        ├── codePostal: string
+        ├── ville: string
+        ├── commentaires: string
+        ├── dateCreation: timestamp
+        └── status: string ("actif")
 ```
 
 ### 3. Collection: `projects` (Projets existants)
@@ -379,16 +402,64 @@ parametres/{clientId}
     }
 ```
 
+## Logique d'Attribution et Opérations sur les Clients
+
+### Algorithme de recherche du client principal:
+```javascript
+// 1. Rechercher le client principal
+const mainClientsQuery = query(
+  collection(db, 'clients'),
+  where('uidclient', '==', user.uid)
+)
+const mainClientsSnapshot = await getDocs(mainClientsQuery)
+
+if (mainClientsSnapshot.empty) {
+  // Erreur: Aucun profil client trouvé pour cet utilisateur
+  return
+}
+
+const mainClientDoc = mainClientsSnapshot.docs[0]
+const mainClientId = mainClientDoc.id
+
+// 2. Opérations dans la sous-collection
+// CRÉATION: clients/{mainClientId}/clients/{newClientId}
+// LECTURE: clients/{mainClientId}/clients/
+// MODIFICATION: clients/{mainClientId}/clients/{clientId}
+// SUPPRESSION: clients/{mainClientId}/clients/{clientId}
+```
+
+### Exemples d'opérations:
+
+**Création d'un nouveau client:**
+```javascript
+const clientSubcollectionRef = collection(db, 'clients', mainClientId, 'clients')
+const docRef = await addDoc(clientSubcollectionRef, newClientData)
+```
+
+**Modification d'un client existant:**
+```javascript
+const clientRef = doc(db, 'clients', mainClientId, 'clients', editingClientId)
+await updateDoc(clientRef, updatedData)
+```
+
+**Lecture des clients:**
+```javascript
+const clientsRef = collection(db, 'clients', mainClientId, 'clients')
+const clientsSnapshot = await getDocs(clientsRef)
+```
+
 ## Relations entre Collections
 
 ### Flux de données principal:
-1. **Client** (`clients/{clientId}`) ↔ **Facturation Client** (`clientsFacturation/{clientId}`)
-2. **Devis** (`devis/{devisId}`) → **Facture** (`factures/{factureId}`) via `factureId`
-3. **Articles** (`articles/{articleId}`) → **Lignes de devis/factures** via `articleId`
-4. **Factures** (`factures/{factureId}`) → **Paiements** (`paiements/{paiementId}`) via `factureId`
-5. **Projets** (`projects/{projectId}`) → **Devis** via `clientId` (même client)
+1. **Client Principal** (`clients/{mainClientId}`) → **Clients gérés** (`clients/{mainClientId}/clients/{clientId}`)
+2. **Client Principal** (`clients/{mainClientId}`) ↔ **Facturation Client** (`clientsFacturation/{mainClientId}`)
+3. **Devis** (`devis/{devisId}`) → **Facture** (`factures/{factureId}`) via `factureId`
+4. **Articles** (`articles/{articleId}`) → **Lignes de devis/factures** via `articleId`
+5. **Factures** (`factures/{factureId}`) → **Paiements** (`paiements/{paiementId}`) via `factureId`
+6. **Projets** (`projects/{projectId}`) → **Devis** via `clientId` (même client)
 
 ### Index recommandés:
+- `clients`: `uidclient` (CRITIQUE pour la logique d'attribution)
 - `factures`: `clientId`, `statut`, `dateCreation`, `dateEcheance`
 - `devis`: `clientId`, `statut`, `dateCreation`, `dateValidite`
 - `paiements`: `factureId`, `clientId`, `datePaiement`
