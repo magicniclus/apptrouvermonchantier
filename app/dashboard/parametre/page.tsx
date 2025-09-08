@@ -29,7 +29,7 @@ import {
 } from 'lucide-react'
 import { db, storage, auth } from '@/lib/firebase'
 import { 
-  collection, doc, getDocs, addDoc, updateDoc, deleteDoc
+  collection, addDoc, getDocs, query, where, doc, updateDoc, deleteDoc, serverTimestamp, getDoc 
 } from 'firebase/firestore'
 import { 
   ref, uploadBytes, getDownloadURL
@@ -77,7 +77,7 @@ interface CompanyData {
 }
 
 export default function ParametrePage() {
-  const { user, clientData, loading: authLoading } = useAuth()
+  const { user, clientData, userData, loading: authLoading } = useAuth()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('profile')
@@ -141,13 +141,14 @@ export default function ParametrePage() {
   const [logoPreview, setLogoPreview] = useState<string>('')
 
   useEffect(() => {
-    if (clientData) {
+    if (clientData && userData) {
+      // Utiliser les données de l'utilisateur connecté (userData) pour les informations personnelles
       setProfileData({
-        nom: clientData.nom || '',
-        prenom: clientData.prenom || '',
-        email: clientData.email || '',
-        telephone: clientData.telephone || '',
-        ville: clientData.ville || ''
+        nom: userData.nom || '',
+        prenom: userData.prenom || '',
+        email: userData.email || '',
+        telephone: userData.telephone || clientData.telephone || '',
+        ville: userData.ville || clientData.ville || ''
       })
       
       // Load company data from clientData or parametres collection
@@ -172,7 +173,7 @@ export default function ParametrePage() {
         setLogoPreview(clientData.logoImage)
       }
     }
-  }, [clientData])
+  }, [clientData, userData])
 
   // Load users for access management
   useEffect(() => {
@@ -228,12 +229,19 @@ export default function ParametrePage() {
 
   // Profile handlers
   const handleProfileSave = async () => {
-    if (!clientData?.id) return
+    if (!clientData?.id || !userData?.id) return
     
     setLoading(true)
     try {
-      const clientRef = doc(db, 'clients', clientData.id)
-      await updateDoc(clientRef, profileData)
+      if (userData.isPrimary) {
+        // Si c'est l'utilisateur principal, mettre à jour le document client
+        const clientRef = doc(db, 'clients', clientData.id)
+        await updateDoc(clientRef, profileData)
+      } else {
+        // Si c'est un sous-compte, mettre à jour dans la sous-collection users
+        const userRef = doc(db, `clients/${clientData.id}/users`, userData.id)
+        await updateDoc(userRef, profileData)
+      }
       toast.success('Profil mis à jour avec succès!')
     } catch (error) {
       console.error('Erreur lors de la mise à jour du profil:', error)
@@ -415,14 +423,54 @@ export default function ParametrePage() {
     if (!clientData?.id) return
     
     try {
+      console.log('=== SUPPRESSION UTILISATEUR ===')
+      console.log('ClientId:', clientData.id, 'UserId:', userId)
+      
+      // Récupérer les données utilisateur pour obtenir l'UID Firebase Auth
       const userRef = doc(db, 'clients', clientData.id, 'users', userId)
+      const userDoc = await getDoc(userRef)
+      
+      if (!userDoc.exists()) {
+        throw new Error('Utilisateur non trouvé')
+      }
+      
+      const userData = userDoc.data()
+      console.log('Données utilisateur à supprimer:', userData)
+      
+      // Supprimer l'utilisateur de Firestore
       await deleteDoc(userRef)
+      console.log('Utilisateur supprimé de Firestore')
+      
+      // Supprimer l'utilisateur de Firebase Auth via l'API
+      if (userData.uid) {
+        console.log('Suppression Firebase Auth via API...')
+        const deleteResponse = await fetch('/api/delete-user', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userUid: userData.uid
+          }),
+        })
+
+        const deleteResult = await deleteResponse.json()
+        console.log('Résultat suppression Firebase Auth:', deleteResult)
+
+        if (deleteResponse.ok) {
+          toast.success('Utilisateur supprimé complètement (Firestore + Firebase Auth)')
+        } else {
+          toast.success(`Utilisateur supprimé de Firestore. Erreur Firebase Auth: ${deleteResult.details}`)
+        }
+      } else {
+        toast.success('Utilisateur supprimé avec succès!')
+      }
+
       loadUsers()
       setDeleteConfirm({ show: false, userId: '', userName: '' })
-      toast.success('Utilisateur supprimé avec succès!')
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur lors de la suppression de l\'utilisateur:', error)
-      toast.error('Erreur lors de la suppression de l\'utilisateur')
+      toast.error(`Erreur lors de la suppression: ${error.message}`)
     }
   }
 
