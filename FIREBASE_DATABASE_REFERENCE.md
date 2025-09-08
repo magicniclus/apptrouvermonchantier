@@ -9,14 +9,9 @@ Add these rules to your Firebase Console > Firestore Database > Rules:
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow read/write access to pendingUsers collection for invitation system
-    match /pendingUsers/{document} {
-      allow read, write: if true;
-    }
-    
-    // Existing rules for other collections
+    // Allow all read/write access for development
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if true;
     }
   }
 }
