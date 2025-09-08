@@ -154,12 +154,14 @@ export default function DevisPage() {
                     </p>
                   </div>
                   <Button 
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex"
                     size="lg"
                     onClick={() => {/* TODO: Open devis creation modal */}}
                   >
+                    <a href="/dashboard/devis/nouveau" className="flex items-center" >
                     <Plus className="w-5 h-5 mr-2" />
                     Créer un nouveau devis
+                    </a>
                   </Button>
                 </CardContent>
               </Card>
@@ -190,12 +192,11 @@ export default function DevisPage() {
                   <option value="expire">Expiré</option>
                   <option value="facture">Facturé</option>
                 </select>
-                <Button 
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
-                  onClick={() => {/* TODO: Open devis creation modal */}}
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Nouveau devis
+                <Button asChild>
+                  <a href="/dashboard/devis/nouveau">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Nouveau devis
+                  </a>
                 </Button>
               </motion.div>
 
