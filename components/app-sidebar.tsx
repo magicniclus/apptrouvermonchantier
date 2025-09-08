@@ -31,7 +31,7 @@ export function AppSidebar() {
   const pathname = usePathname()
   
   // Auto-expand Facturation menu when on related pages
-  const facturationPages = ["/registre", "/facturation/factures", "/facturation/devis", "/dashboard/clients"]
+  const facturationPages = ["/dashboard/factures", "/dashboard/devis", "/dashboard/clients"]
   const shouldExpandFacturation = facturationPages.some(page => pathname === page)
   const [isFacturationOpen, setIsFacturationOpen] = useState(shouldExpandFacturation)
   
@@ -130,22 +130,15 @@ export function AppSidebar() {
                 {isFacturationOpen && (
                   <SidebarMenuSub>
                     <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={pathname === "/registre"}>
-                        <a href="/registre">
-                          <span>Registre</span>
-                        </a>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={pathname === "/facturation/factures"}>
-                        <a href="/facturation/factures">
+                      <SidebarMenuSubButton asChild isActive={pathname === "/dashboard/factures"}>
+                        <a href="/dashboard/factures">
                           <span>Factures</span>
                         </a>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
                     <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={pathname === "/facturation/devis"}>
-                        <a href="/facturation/devis">
+                      <SidebarMenuSubButton asChild isActive={pathname === "/dashboard/devis"}>
+                        <a href="/dashboard/devis">
                           <span>Devis</span>
                         </a>
                       </SidebarMenuSubButton>
@@ -169,20 +162,24 @@ export function AppSidebar() {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={pathname === "/dashboard/parametre"}>
-              <a href="/dashboard/parametre">
-                <Settings />
-                <span>Paramètres</span>
-              </a>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
             <SidebarMenuButton 
-              onClick={handleLogout}
-              className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
+              asChild 
+              isActive={pathname === "/dashboard/parametre"}
+              className="h-auto p-3"
             >
-              <LogOut />
-              <span>Déconnexion</span>
+              <a href="/dashboard/parametre" className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 text-white font-semibold text-sm shadow-md">
+                  {clientData?.prenom?.charAt(0)?.toUpperCase()}{clientData?.nom?.charAt(0)?.toUpperCase()}
+                </div>
+                <div className="flex flex-col items-start min-w-0 flex-1">
+                  <span className="font-medium text-sm truncate w-full">
+                    {clientData?.prenom} {clientData?.nom}
+                  </span>
+                  <span className="text-xs text-sidebar-foreground/70 truncate w-full">
+                    {clientData?.email}
+                  </span>
+                </div>
+              </a>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
