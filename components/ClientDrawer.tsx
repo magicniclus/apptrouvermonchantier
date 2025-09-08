@@ -9,15 +9,23 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { X } from 'lucide-react'
+import { X, Trash2 } from 'lucide-react'
 import { AddressAutocomplete } from '@/components/AddressAutocomplete'
 import { db } from '@/lib/firebase'
-import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, updateDoc } from 'firebase/firestore'
+import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore'
 import { useAuth } from '@/hooks/useAuth'
 
 interface ClientDrawerProps {
@@ -64,6 +72,8 @@ export function ClientDrawer({ open, onOpenChange, editingClient }: ClientDrawer
 
   const [formData, setFormData] = useState(initialFormData)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const isEditMode = !!editingClient
 
   // Initialize form with editing client data
@@ -116,8 +126,6 @@ export function ClientDrawer({ open, onOpenChange, editingClient }: ClientDrawer
       editingClient: editingClient?.id 
     })
     
-    // Force log pour debug
-    alert('Form submitted! Check console for details')
     
     if (!isFormValid) {
       console.log('❌ Form not valid')
@@ -246,6 +254,54 @@ export function ClientDrawer({ open, onOpenChange, editingClient }: ClientDrawer
     }
   }
 
+  const handleDeleteClient = async () => {
+    if (!editingClient || !user) {
+      return
+    }
+
+    setIsDeleting(true)
+    console.log('🗑️ Début de la suppression du client:', editingClient.id)
+
+    try {
+      // Trouver le document client principal avec uidclient correspondant à l'utilisateur connecté
+      console.log('🔍 Recherche du client principal avec uidclient:', user.uid)
+      
+      const mainClientsQuery = query(
+        collection(db, 'clients'),
+        where('uidclient', '==', user.uid)
+      )
+      const mainClientsSnapshot = await getDocs(mainClientsQuery)
+      
+      if (mainClientsSnapshot.empty) {
+        console.log('❌ Aucun client principal trouvé avec uidclient:', user.uid)
+        toast.error('Aucun profil client principal trouvé pour cet utilisateur')
+        setIsDeleting(false)
+        return
+      }
+      
+      // Prendre le premier document client principal trouvé
+      const mainClientDoc = mainClientsSnapshot.docs[0]
+      const mainClientId = mainClientDoc.id
+      console.log('✅ Client principal trouvé avec ID:', mainClientId)
+      
+      // Supprimer le client de la sous-collection
+      const clientRef = doc(db, 'clients', mainClientId, 'clients', editingClient.id)
+      console.log('🗑️ Suppression dans clients/{mainClientId}/clients/{clientId}:', mainClientId, editingClient.id)
+      
+      await deleteDoc(clientRef)
+      console.log('✅ Client supprimé avec succès')
+      
+      toast.success('Client supprimé avec succès!')
+      setShowDeleteDialog(false)
+      onOpenChange(false)
+    } catch (error) {
+      console.error('❌ Erreur lors de la suppression du client:', error)
+      toast.error(`Erreur lors de la suppression: ${error instanceof Error ? error.message : 'Erreur inconnue'}`)
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   const handleAddressSelect = (address: string, postalCode: string, city: string) => {
     setFormData({
       ...formData,
@@ -267,6 +323,7 @@ export function ClientDrawer({ open, onOpenChange, editingClient }: ClientDrawer
   }
 
   return (
+    <>
     <Sheet open={open} onOpenChange={(newOpen) => {
       if (!newOpen) {
         resetForm()
@@ -539,33 +596,90 @@ export function ClientDrawer({ open, onOpenChange, editingClient }: ClientDrawer
 
         {/* Footer fixe avec actions */}
         <div className="sticky bottom-0 bg-white dark:bg-gray-950 border-t px-6 py-4">
-          <div className="flex justify-end space-x-3">
-            <Button
+          <div className="flex justify-center space-x-3">
+            {/* <Button
               type="button"
               variant="outline"
               onClick={handleCancel}
               className="px-6"
             >
               Annuler
-            </Button>
-            <Button
-              type="button"
-              disabled={!isFormValid || isSubmitting}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-              onClick={(e) => {
-                console.log('🔘 Button clicked directly!', { disabled: !isFormValid || isSubmitting, isFormValid, isSubmitting })
-                e.preventDefault()
-                handleSubmit(e as any)
-              }}
-            >
-              {isSubmitting 
-                ? (isEditMode ? 'Modification en cours...' : 'Ajout en cours...') 
-                : (isEditMode ? 'Modifier le client' : 'Ajouter le client')
-              }
-            </Button>
+            </Button> */}
+            <div className="flex flex-col space-y-2">
+              <Button
+                type="button"
+                disabled={!isFormValid || isSubmitting}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+                onClick={(e) => {
+                  console.log('🔘 Button clicked directly!', { disabled: !isFormValid || isSubmitting, isFormValid, isSubmitting })
+                  e.preventDefault()
+                  handleSubmit(e as any)
+                }}
+              >
+                {isSubmitting 
+                  ? (isEditMode ? 'Modification en cours...' : 'Ajout en cours...') 
+                  : (isEditMode ? 'Modifier le client' : 'Ajouter le client')
+                }
+              </Button>
+              {isEditMode && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => setShowDeleteDialog(true)}
+                  disabled={isDeleting || isSubmitting}
+                  className="flex items-center justify-center gap-2"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Supprimer
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </SheetContent>
     </Sheet>
+    
+    {/* Dialog de confirmation de suppression */}
+    <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Confirmer la suppression</DialogTitle>
+          <DialogDescription>
+            Êtes-vous sûr de vouloir supprimer ce client ? Cette action est irréversible.
+            {editingClient && (
+              <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
+                <span className="font-medium">
+                  {editingClient.typeClient === 'entreprise' 
+                    ? editingClient.nomEntreprise 
+                    : `${editingClient.nom} ${editingClient.prenom}`
+                  }
+                </span>
+              </div>
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button
+            variant="destructive"
+            onClick={handleDeleteClient}
+            disabled={isDeleting}
+            className="flex items-center gap-2"
+          >
+            {isDeleting ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Suppression...
+              </>
+            ) : (
+              <>
+                <Trash2 className="w-4 h-4" />
+                Supprimer définitivement
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }
