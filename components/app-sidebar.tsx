@@ -93,6 +93,7 @@ export function AppSidebar() {
                     asChild={!item.onClick}
                     isActive={item.isActive}
                     onClick={item.onClick}
+                    className="cursor-pointer"
                   >
                     {item.onClick ? (
                       <>
@@ -101,7 +102,7 @@ export function AppSidebar() {
                         {item.hasExternalIcon && <ExternalLink className="ml-auto h-4 w-4" />}
                       </>
                     ) : (
-                      <a href={item.url}>
+                      <a href={item.url} className="cursor-pointer">
                         <item.icon />
                         <span>{item.title}</span>
                       </a>
@@ -121,6 +122,7 @@ export function AppSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton 
                   onClick={() => setIsFacturationOpen(!isFacturationOpen)}
+                  className="cursor-pointer"
                 >
                   <BookOpen />
                   <span>Facturation</span>
@@ -133,6 +135,7 @@ export function AppSidebar() {
                       <SidebarMenuSubButton 
                         isActive={pathname === "/dashboard/factures"}
                         onClick={() => router.push("/dashboard/factures")}
+                        className="cursor-pointer"
                       >
                         <span>Factures</span>
                       </SidebarMenuSubButton>
@@ -141,6 +144,7 @@ export function AppSidebar() {
                       <SidebarMenuSubButton 
                         isActive={pathname === "/dashboard/devis"}
                         onClick={() => router.push("/dashboard/devis")}
+                        className="cursor-pointer"
                       >
                         <span>Devis</span>
                       </SidebarMenuSubButton>
@@ -149,6 +153,7 @@ export function AppSidebar() {
                       <SidebarMenuSubButton 
                         isActive={pathname === "/dashboard/clients"}
                         onClick={() => router.push("/dashboard/clients")}
+                        className="cursor-pointer"
                       >
                         <span>Clients</span>
                       </SidebarMenuSubButton>
@@ -168,9 +173,9 @@ export function AppSidebar() {
             <SidebarMenuButton 
               asChild 
               isActive={pathname === "/dashboard/parametre"}
-              className="h-auto p-3"
+              className="h-auto p-3 cursor-pointer"
             >
-              <a href="/dashboard/parametre" className="flex items-center gap-3">
+              <a href="/dashboard/parametre" className="flex items-center gap-3 cursor-pointer">
                 <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold">
                   {clientData?.prenom?.charAt(0)?.toUpperCase()}{clientData?.nom?.charAt(0)?.toUpperCase()}
                 </div>
