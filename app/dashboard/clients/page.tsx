@@ -96,19 +96,12 @@ export default function ClientsPage() {
 
   return (
     <>
-      <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b px-4">
+      <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
         <div className="flex items-center gap-2">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
             Clients
           </h1>
         </div>
-        <Button 
-          className="bg-blue-600 hover:bg-blue-700 text-white"
-          onClick={() => setIsDrawerOpen(true)}
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Ajouter un client
-        </Button>
       </header>
       
       <div className="flex-1 overflow-auto p-4 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
@@ -118,7 +111,7 @@ export default function ClientsPage() {
           animate="visible"
           className="container mx-auto space-y-6"
         >
-          {clientsLoading ? (
+          {(clientsLoading || authLoading) ? (
             <div className="flex justify-center items-center min-h-[60vh]">
               <PulseLoader text="Chargement des clients..." />
             </div>
@@ -176,6 +169,13 @@ export default function ClientsPage() {
                   <option value="particulier">Particulier</option>
                   <option value="entreprise">Entreprise</option>
                 </select>
+                <Button 
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  onClick={() => setIsDrawerOpen(true)}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Ajouter un client
+                </Button>
               </motion.div>
 
               {/* Tableau des clients */}
