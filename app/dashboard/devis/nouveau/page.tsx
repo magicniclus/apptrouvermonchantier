@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox'
 import { Separator } from '@/components/ui/separator'
 import { X, Upload, Plus, Trash2, Settings, FileText, Calendar, ArrowRight, ChevronDown } from 'lucide-react'
+import DevisFooter from '@/components/DevisFooter'
 import { useAuth } from '@/hooks/useAuth'
 import { useClients, Client } from '@/hooks/useClients'
 import { useRouter } from 'next/navigation'
@@ -534,7 +535,7 @@ export default function NouveauDevisPage() {
         {/* A4 Document Container */}
         <div className="relative">
           {/* A4 Page */}
-          <div className="w-[210mm] min-h-[297mm] bg-white shadow-lg p-8 space-y-6" style={{width: '210mm', minHeight: '297mm'}}>
+          <div className="w-[210mm] min-h-[297mm] bg-white shadow-lg p-8 space-y-6 flex flex-col" style={{width: '210mm', minHeight: '297mm'}}>
             
             {/* Company Info Section */}
             <div className="flex items-start justify-between mb-8">
@@ -1038,6 +1039,11 @@ export default function NouveauDevisPage() {
               )}
             </div>
 
+            {/* Spacer to push footer to bottom */}
+            <div className="flex-grow"></div>
+            
+            {/* Footer with legal text and company info */}
+            <DevisFooter />
           </div>
           
           {/* Options Card - Positioned at top right of A4 sheet */}
@@ -1196,6 +1202,7 @@ export default function NouveauDevisPage() {
         onOpenChange={setIsClientDrawerOpen}
         editingClient={selectedClient}
       />
+
     </div>
   )
 }
