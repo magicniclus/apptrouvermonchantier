@@ -460,7 +460,7 @@ Gestion des devis clients.
 
 ```
 devis/{devisId}
-├── numeroDevis: string (auto-généré, ex: "DEV-2025-001")
+├── numeroDevis: string (auto-généré via numerotation, ex: "DEV-2025-001")
 ├── clientId: string (référence vers clients/{clientId})
 ├── dateCreation: timestamp
 ├── dateValidite: timestamp
@@ -472,13 +472,8 @@ devis/{devisId}
 ├── montantTVA: number
 ├── devise: string ("EUR")
 ├── validiteDuree: number (jours, ex: 30)
-├── adresseDevis: {
-│   ├── nom: string
-│   ├── adresse: string
-│   ├── codePostal: string
-│   ├── ville: string
-│   └── pays: string
-│   }
+├── clientNom: string (nom du client pour affichage)
+├── clientEmail: string (email du client)
 ├── lignes: array<{
 │   ├── articleId: string|null
 │   ├── designation: string
@@ -490,10 +485,17 @@ devis/{devisId}
 │   }>
 ├── conditions: string
 ├── notes: string
+├── options: {
+│   ├── typeFacturation: string ("HT" | "TTC")
+│   ├── tauxTVA: number
+│   ├── mentionsLegales: boolean
+│   └── conditionsGenerales: boolean
+│   }
 ├── fichierPDF: string|null
 ├── envoye: boolean
 ├── dateEnvoi: timestamp|null
 ├── dateAcceptation: timestamp|null
+├── uidclient: string (ID utilisateur propriétaire)
 └── historique: array<{
     ├── date: timestamp
     ├── action: string
@@ -592,26 +594,51 @@ paiements/{paiementId}
 └── justificatif: string|null (URL document)
 ```
 
-### 9. Collection: `numerotation`
-Gestion de la numérotation automatique.
+### 9. Système de numérotation automatique
+Gestion de la numérotation automatique pour devis et factures.
 
-```
-numerotation/
-├── factures: {
-│   ├── annee: number (2025)
-│   ├── dernier: number (dernière facture)
-│   └── prefixe: string ("FAC")
-│   }
-├── devis: {
-│   ├── annee: number
-│   ├── dernier: number
-│   └── prefixe: string ("DEV")
-│   }
-└── clients: {
-    ├── dernier: number
-    └── prefixe: string ("CLI")
-    }
-```
+**IMPORTANT:** Le système de numérotation ne stocke plus de compteurs. Il scanne directement les documents existants.
+
+**Structure obsolète (plus utilisée):** `clients/{clientId}/numerotation/config`
+
+**Nouvelle logique - Scan direct des collections:**
+- Scanner `clients/{clientId}/devis/` pour les devis
+- Scanner `clients/{clientId}/factures/` pour les factures
+- Analyser tous les documents (statut brouillon ET enregistrés)
+- Extraire le plus grand numéro de l'année courante
+- Générer le suivant (dernier + 1)
+
+**Logique de numérotation:**
+- Format: `{PREFIXE}-{ANNEE}-{NUMERO}` (ex: "DEV-2025-001")
+- **Scan complet** de tous les documents existants (brouillon ET enregistrés)
+- **Numérotation séquentielle** : prend le dernier numéro trouvé + 1
+- **Premier document** : commence à 001 si aucun document n'existe
+- **Génération à l'ouverture** de la page de création (pas à la sauvegarde)
+- **Pas de système de compteur** - se base uniquement sur les documents réels
+
+**Algorithme de génération:**
+1. Scanner tous les documents de la collection (devis ou factures)
+2. Trouver le plus grand numéro pour l'année en cours
+3. Retourner ce numéro + 1 (ou 1 si aucun document)
+4. Format: `DEV-2025-XXX` ou `FAC-2025-XXX`
+
+**Exemples de fonctionnement:**
+- **Aucun devis** → Premier devis : `DEV-2025-001`
+- **Devis existants** : `DEV-2025-001`, `DEV-2025-003` → Prochain : `DEV-2025-004`
+- **Changement d'année** → Repart à `DEV-2026-001`
+- **Tous statuts inclus** : brouillon, envoyé, accepté, refusé, etc.
+
+**Fonctions utilitaires:**
+- `genererProchainNumero(clientId, type)` - Génère le prochain numéro basé sur scan
+- `trouverDernierNumeroUtilise(clientId, type, annee, prefixe)` - Scan des documents existants
+- `verifierNumeroExistant(clientId, numero, type)` - Vérifie l'unicité
+
+**Avantages du nouveau système:**
+- ✅ Pas de trous dans la numérotation
+- ✅ Résistant aux suppressions de documents
+- ✅ Pas de système de compteur à maintenir
+- ✅ Génération immédiate à l'ouverture de page
+- ✅ Basé sur la réalité des documents existants
 
 ### 10. Collection: `parametres`
 Configuration générale de l'application.
