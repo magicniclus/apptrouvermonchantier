@@ -13,6 +13,8 @@ interface CompanyInfo {
   numeroTVA?: string
   codeAPE?: string
   customFooterContent?: string
+  customCompanyInfo?: string
+  freeFieldContent?: string
 }
 
 interface ClientData {
@@ -24,13 +26,20 @@ interface ClientData {
 
 interface DevisFooterProps {
   className?: string
+  showConditions?: boolean
+  showCompanyInfo?: boolean
+  showFreeField?: boolean
 }
 
-export default function DevisFooter({ className = '' }: DevisFooterProps) {
+export default function DevisFooter({ className = '', showConditions = true, showCompanyInfo = true, showFreeField = false }: DevisFooterProps) {
   const { user } = useAuth()
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>({})
   const [isEditing, setIsEditing] = useState(false)
   const [customContent, setCustomContent] = useState('')
+  const [customCompanyInfo, setCustomCompanyInfo] = useState('')
+  const [isEditingCompanyInfo, setIsEditingCompanyInfo] = useState(false)
+  const [freeFieldContent, setFreeFieldContent] = useState('')
+  const [isEditingFreeField, setIsEditingFreeField] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
@@ -61,11 +70,31 @@ export default function DevisFooter({ className = '' }: DevisFooterProps) {
           siret: mainClientData.siret,
           numeroTVA: mainClientData.numeroTVA,
           codeAPE: mainClientData.codeAPE,
-          customFooterContent: mainClientData.customFooterContent
+          customFooterContent: mainClientData.customFooterContent,
+          customCompanyInfo: mainClientData.customCompanyInfo,
+          freeFieldContent: mainClientData.freeFieldContent
         }
         
         setCompanyInfo(clientInfo)
         setCustomContent(clientInfo.customFooterContent || '')
+        
+        // Build default company info from database values
+        const defaultCompanyInfo = []
+        if (mainClientData.siret) {
+          defaultCompanyInfo.push(`SIREN ${mainClientData.siret}`)
+        }
+        if (mainClientData.codeAPE) {
+          defaultCompanyInfo.push(`NAF ${mainClientData.codeAPE}`)
+        }
+        if (mainClientData.numeroTVA) {
+          defaultCompanyInfo.push(`TVA intracommunautaire : ${mainClientData.numeroTVA}`)
+        }
+        
+        // Use custom company info if exists, otherwise use built default from database
+        setCustomCompanyInfo(mainClientData.customCompanyInfo || defaultCompanyInfo.join(' - '))
+        
+        // Set free field content
+        setFreeFieldContent(mainClientData.freeFieldContent || '')
       }
     } catch (error) {
       console.error('Error loading company info:', error)
@@ -107,9 +136,85 @@ export default function DevisFooter({ className = '' }: DevisFooterProps) {
     }
   }
 
+  const saveCustomCompanyInfo = async () => {
+    try {
+      setSaving(true)
+      
+      // Find main client document
+      const mainClientsQuery = query(
+        collection(db, 'clients'),
+        where('uidclient', '==', user?.uid)
+      )
+      const mainClientsSnapshot = await getDocs(mainClientsQuery)
+      
+      if (!mainClientsSnapshot.empty) {
+        const mainClientDoc = mainClientsSnapshot.docs[0]
+        const mainClientId = mainClientDoc.id
+        
+        // Update main client document with custom company info
+        const mainClientRef = doc(db, 'clients', mainClientId)
+        await updateDoc(mainClientRef, {
+          customCompanyInfo: customCompanyInfo,
+          dateModification: new Date(),
+          modifiePar: user?.uid
+        })
+        
+        setCompanyInfo(prev => ({ ...prev, customCompanyInfo: customCompanyInfo }))
+        setIsEditingCompanyInfo(false)
+      }
+    } catch (error) {
+      console.error('Error saving custom company info:', error)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const saveFreeFieldContent = async () => {
+    try {
+      setSaving(true)
+      
+      // Find main client document
+      const mainClientsQuery = query(
+        collection(db, 'clients'),
+        where('uidclient', '==', user?.uid)
+      )
+      const mainClientsSnapshot = await getDocs(mainClientsQuery)
+      
+      if (!mainClientsSnapshot.empty) {
+        const mainClientDoc = mainClientsSnapshot.docs[0]
+        const mainClientId = mainClientDoc.id
+        
+        // Update main client document with free field content
+        const mainClientRef = doc(db, 'clients', mainClientId)
+        await updateDoc(mainClientRef, {
+          freeFieldContent: freeFieldContent,
+          dateModification: new Date(),
+          modifiePar: user?.uid
+        })
+        
+        setCompanyInfo(prev => ({ ...prev, freeFieldContent: freeFieldContent }))
+        setIsEditingFreeField(false)
+      }
+    } catch (error) {
+      console.error('Error saving free field content:', error)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handleCancel = () => {
     setCustomContent(companyInfo.customFooterContent || '')
     setIsEditing(false)
+  }
+
+  const handleCancelCompanyInfo = () => {
+    setCustomCompanyInfo(companyInfo.customCompanyInfo || '')
+    setIsEditingCompanyInfo(false)
+  }
+
+  const handleCancelFreeField = () => {
+    setFreeFieldContent(companyInfo.freeFieldContent || '')
+    setIsEditingFreeField(false)
   }
 
   if (loading) {
@@ -190,14 +295,139 @@ export default function DevisFooter({ className = '' }: DevisFooterProps) {
               </div>
             </div>
           ) : (
-            <div className="space-y-2 text-center">
-              <p className="text-xs text-gray-600 leading-relaxed">
-                {displayContent}
-              </p>
-              {companyInfoLine && (
-                <p className="text-xs text-gray-500 text-center">
-                  {companyInfoLine}
-                </p>
+            <div className="space-y-4">
+              {showConditions && (
+                <div className="text-center">
+                  <p className="text-xs text-gray-600 leading-relaxed">
+                    {displayContent}
+                  </p>
+                </div>
+              )}
+              {showFreeField && (
+                <div className="relative">
+                  {/* Edit button for free field */}
+                  <div className="absolute -top-2 -right-2">
+                    {!isEditingFreeField ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setIsEditingFreeField(true)}
+                        className="h-6 w-6 p-0 hover:bg-gray-100"
+                      >
+                        <Edit3 className="w-3 h-3" />
+                      </Button>
+                    ) : (
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={saveFreeFieldContent}
+                          disabled={saving}
+                          className="h-6 w-6 p-0 hover:bg-green-100"
+                        >
+                          <Save className="w-3 h-3 text-green-600" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleCancelFreeField}
+                          className="h-6 w-6 p-0 hover:bg-red-100"
+                        >
+                          <X className="w-3 h-3 text-red-600" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Free field content */}
+                  <div className="pr-8">
+                    {isEditingFreeField ? (
+                      <div className="space-y-2">
+                        <Textarea
+                          value={freeFieldContent}
+                          onChange={(e) => setFreeFieldContent(e.target.value)}
+                          placeholder="Champ libre"
+                          className="min-h-[60px] text-xs resize-none text-center"
+                          disabled={saving}
+                        />
+                        <div className="text-xs text-gray-500 text-center">
+                          Champ libre personnalisable
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center">
+                        {freeFieldContent ? (
+                          <p className="text-xs text-gray-600 leading-relaxed">
+                            {freeFieldContent}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-gray-400 italic leading-relaxed">
+                            Cliquez sur l'icône d'édition pour ajouter du contenu au champ libre
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              {showCompanyInfo && (
+                <div className="relative">
+                  {/* Edit button for company info */}
+                  <div className="absolute -top-2 -right-2">
+                    {!isEditingCompanyInfo ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setIsEditingCompanyInfo(true)}
+                        className="h-6 w-6 p-0 hover:bg-gray-100"
+                      >
+                        <Edit3 className="w-3 h-3" />
+                      </Button>
+                    ) : (
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={saveCustomCompanyInfo}
+                          disabled={saving}
+                          className="h-6 w-6 p-0 hover:bg-green-100"
+                        >
+                          <Save className="w-3 h-3 text-green-600" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleCancelCompanyInfo}
+                          className="h-6 w-6 p-0 hover:bg-red-100"
+                        >
+                          <X className="w-3 h-3 text-red-600" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Company info content */}
+                  <div className="pr-8">
+                    {isEditingCompanyInfo ? (
+                      <div className="space-y-2">
+                        <Textarea
+                          value={customCompanyInfo}
+                          onChange={(e) => setCustomCompanyInfo(e.target.value)}
+                          placeholder="SIREN 12456352987 - NAF 1234Z - TVA intracommunautaire : FR123456789012"
+                          className="min-h-[60px] text-xs resize-none text-center"
+                          disabled={saving}
+                        />
+                        <div className="text-xs text-gray-500 text-center">
+                          Informations d'entreprise personnalisables
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-500 text-center">
+                        {customCompanyInfo}
+                      </p>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
           )}
