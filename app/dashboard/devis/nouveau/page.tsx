@@ -66,7 +66,7 @@ export default function NouveauDevisPage() {
   const [showExitModal, setShowExitModal] = useState(false)
   const [isAutoSaving, setIsAutoSaving] = useState(false)
 
-  // Initialize dates and generate numero
+  // Initialize dates only
   useEffect(() => {
     const today = new Date()
     const validityDate = new Date(today)
@@ -283,21 +283,34 @@ export default function NouveauDevisPage() {
         dateCreation: serverTimestamp(),
         dateValidite: new Date(devisData.dateValidite || new Date()),
         validiteDuree: devisData.validiteDuree,
-        clientId: null,
-        clientNom: '',
-        clientEmail: '',
-        lignes: [],
-        montantTotalHT: 0,
-        montantTotalTVA: 0,
-        montantTotalTTC: 0,
+        validiteTexte: devisData.validiteTexte || '',
+        clientId: selectedClient?.id || null,
+        clientNom: selectedClient?.nom || '',
+        clientEmail: selectedClient?.email || '',
+        clientSiret: selectedClient?.siret || '',
+        clientNumeroTVA: selectedClient?.numeroTVA || '',
+        clientCodeAPE: selectedClient?.codeAPE || '',
+        lignes: lignes || [],
+        montantTotalHT: totalHT || 0,
+        montantTotalTVA: totalTVA || 0,
+        montantTotalTTC: totalTTC || 0,
         status: 'brouillon',
-        conditions: '',
-        notes: '',
+        type: 'devis',
+        conditions: devisData.conditions || '',
+        notes: devisData.notes || '',
         options: options,
-        uidclient: user.uid
+        adresseLivraison: options.adresseLivraison ? adresseLivraison : null,
+        intituleDocument: options.intituleDocument ? intituleDocument : null,
+        remiseGlobale: options.remiseGlobale ? remiseGlobale : null,
+        uidclient: user.uid,
+        mainClientId: mainClientDoc.id,
+        lastModified: serverTimestamp()
       }
 
       console.log('📝 Données du brouillon à créer:', brouillonData)
+      console.log('👤 Client sélectionné:', selectedClient)
+      console.log('🏢 SIRET client:', selectedClient?.siret)
+      console.log('💼 TVA client:', selectedClient?.numeroTVA)
       console.log('🎯 Chemin de la collection:', `clients/${mainClientDoc.id}/devis`)
       
       const devisRef = collection(db, `clients/${mainClientDoc.id}/devis`)
@@ -320,31 +333,45 @@ export default function NouveauDevisPage() {
     console.log('=== FIN CRÉATION BROUILLON ===')
   }
 
-  // Sauvegarder automatiquement le brouillon
+  // Sauvegarder manuellement le brouillon
   const sauvegarderBrouillon = async () => {
-    if (!brouillonId || !clientData?.id || !user?.uid || isAutoSaving) {
-      console.log('Sauvegarde ignorée:', { brouillonId, clientDataId: clientData?.id, userUid: user?.uid, isAutoSaving })
+    if (!user?.uid) {
+      toast.error('Utilisateur non connecté')
+      return
+    }
+
+    if (!brouillonId) {
+      // Créer un nouveau brouillon
+      await creerBrouillon()
       return
     }
 
     setIsAutoSaving(true)
     try {
-      console.log('Sauvegarde automatique du brouillon:', brouillonId)
+      console.log('Sauvegarde manuelle du brouillon:', brouillonId)
       
       const brouillonData = {
+        dateCreation: devisData.dateCreation,
         dateValidite: new Date(devisData.dateValidite),
         validiteDuree: devisData.validiteDuree,
         validiteTexte: devisData.validiteTexte,
         clientId: selectedClient?.id || null,
         clientNom: selectedClient ? (selectedClient.typeClient === 'entreprise' ? selectedClient.nomEntreprise : `${selectedClient.nom} ${selectedClient.prenom}`) : '',
         clientEmail: selectedClient?.email || '',
+        clientSiret: selectedClient?.siret || '',
+        clientNumeroTVA: selectedClient?.numeroTVA || '',
+        clientCodeAPE: selectedClient?.codeAPE || '',
         lignes: lignes.map(ligne => ({
+          id: ligne.id,
           designation: ligne.designation,
           quantite: ligne.quantite,
+          unite: ligne.unite,
           prixUnitaireHT: ligne.prixUnitaireHT,
           remise: ligne.remise,
           montantHT: ligne.montantHT,
-          tauxTVA: ligne.tauxTVA
+          tauxTVA: ligne.tauxTVA,
+          typePrestation: ligne.typePrestation,
+          isDesignationOnly: ligne.isDesignationOnly
         })),
         montantTotalHT: totalHT,
         montantTotalTVA: totalTVA,
@@ -352,10 +379,16 @@ export default function NouveauDevisPage() {
         conditions: devisData.conditions,
         notes: devisData.notes,
         options: options,
+        adresseLivraison: options.adresseLivraison ? adresseLivraison : null,
+        intituleDocument: options.intituleDocument ? intituleDocument : null,
+        remiseGlobale: options.remiseGlobale ? remiseGlobale : null,
         lastModified: serverTimestamp()
       }
 
       console.log('Données à sauvegarder:', brouillonData)
+      console.log('👤 Client sélectionné pour sauvegarde:', selectedClient)
+      console.log('🏢 SIRET client pour sauvegarde:', selectedClient?.siret)
+      console.log('💼 TVA client pour sauvegarde:', selectedClient?.numeroTVA)
 
       // Find main client document
       const clientsRef = collection(db, 'clients')
@@ -366,12 +399,14 @@ export default function NouveauDevisPage() {
         const devisRef = doc(db, `clients/${mainClientDoc.id}/devis`, brouillonId)
         await updateDoc(devisRef, brouillonData)
         console.log('Brouillon sauvegardé avec succès')
+        toast.success('Brouillon sauvegardé avec succès')
       } else {
         console.error('Client principal non trouvé pour la sauvegarde')
+        toast.error('Erreur lors de la sauvegarde')
       }
     } catch (error) {
-      console.error('Erreur lors de la sauvegarde automatique:', error)
-      toast.error('Erreur lors de la sauvegarde automatique')
+      console.error('Erreur lors de la sauvegarde manuelle:', error)
+      toast.error('Erreur lors de la sauvegarde du brouillon')
     } finally {
       setIsAutoSaving(false)
     }
@@ -486,16 +521,7 @@ export default function NouveauDevisPage() {
     }
   }
 
-  // Sauvegarder automatiquement quand les données changent
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (brouillonId) {
-        sauvegarderBrouillon()
-      }
-    }, 2000) // Sauvegarde après 2 secondes d'inactivité
-
-    return () => clearTimeout(timer)
-  }, [selectedClient, lignes, devisData, options, totalHT, totalTVA, totalTTC])
+  // Plus de sauvegarde automatique - uniquement manuelle
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -1430,8 +1456,17 @@ export default function NouveauDevisPage() {
         </div>
       </div>
 
-      {/* Fixed Bottom Button */}
-      <div className="fixed bottom-0 left-0 right-0 bg-transparent p-4 flex justify-center z-30">
+      {/* Fixed Bottom Buttons */}
+      <div className="fixed bottom-0 left-0 right-0 bg-transparent p-4 flex justify-center gap-4 z-30">
+        <Button 
+          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 cursor-pointer"
+          onClick={sauvegarderBrouillon}
+          size="lg"
+          variant="outline"
+        >
+          <FileText className="w-4 h-4 mr-2" />
+          Sauvegarder en brouillon
+        </Button>
         <Button 
           className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 cursor-pointer"
           onClick={handleSaveDevis}
