@@ -67,7 +67,10 @@ export function ClientDrawer({ open, onOpenChange, editingClient }: ClientDrawer
     complementAdresse: '',
     codePostal: '',
     ville: '',
-    commentaires: ''
+    commentaires: '',
+    siret: '',
+    numeroTVA: '',
+    codeAPE: ''
   }
 
   const [formData, setFormData] = useState(initialFormData)
@@ -92,7 +95,10 @@ export function ClientDrawer({ open, onOpenChange, editingClient }: ClientDrawer
         complementAdresse: String(editingClient.complementAdresse || ''),
         codePostal: String(editingClient.codePostal || ''),
         ville: String(editingClient.ville || ''),
-        commentaires: String(editingClient.commentaires || '')
+        commentaires: String(editingClient.commentaires || ''),
+        siret: String((editingClient as any).siret || ''),
+        numeroTVA: String((editingClient as any).numeroTVA || ''),
+        codeAPE: String((editingClient as any).codeAPE || '')
       })
     } else {
       setFormData(initialFormData)
@@ -514,6 +520,47 @@ export function ClientDrawer({ open, onOpenChange, editingClient }: ClientDrawer
                     className="h-11"
                   />
                 </div>
+
+                {/* Champs entreprise uniquement */}
+                {formData.typeClient === 'entreprise' && (
+                  <>
+                    {/* SIRET */}
+                    <div className="space-y-2">
+                      <Label htmlFor="siret" className="text-sm font-medium text-gray-700 dark:text-gray-300">N° SIRET (optionnel)</Label>
+                      <Input
+                        id="siret"
+                        placeholder="12345678901234"
+                        value={formData.siret}
+                        onChange={(e) => setFormData({ ...formData, siret: e.target.value })}
+                        className="h-11"
+                      />
+                    </div>
+
+                    {/* Numéro TVA */}
+                    <div className="space-y-2">
+                      <Label htmlFor="numeroTVA" className="text-sm font-medium text-gray-700 dark:text-gray-300">N° TVA intracommunautaire (optionnel)</Label>
+                      <Input
+                        id="numeroTVA"
+                        placeholder="FR12345678901"
+                        value={formData.numeroTVA}
+                        onChange={(e) => setFormData({ ...formData, numeroTVA: e.target.value })}
+                        className="h-11"
+                      />
+                    </div>
+
+                    {/* Code APE */}
+                    <div className="space-y-2">
+                      <Label htmlFor="codeAPE" className="text-sm font-medium text-gray-700 dark:text-gray-300">Code APE/NAF (optionnel)</Label>
+                      <Input
+                        id="codeAPE"
+                        placeholder="6201Z"
+                        value={formData.codeAPE}
+                        onChange={(e) => setFormData({ ...formData, codeAPE: e.target.value })}
+                        className="h-11"
+                      />
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
