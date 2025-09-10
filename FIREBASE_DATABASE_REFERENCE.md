@@ -117,7 +117,8 @@ clients/
                 ├── montantTotalHT: number
                 ├── montantTotalTVA: number
                 ├── montantTotalTTC: number
-                ├── status: "brouillon"
+                ├── status: "brouillon" | "envoye" | "accepte" | "refuse" | "expire" | "facture"
+                ├── numeroDevis?: string (généré lors de la validation)
                 ├── type: "devis"
                 ├── conditions: string
                 ├── notes: string
