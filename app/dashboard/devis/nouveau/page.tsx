@@ -13,6 +13,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useClients, Client } from '@/hooks/useClients'
 import { useRouter } from 'next/navigation'
 import { ClientDrawer } from '@/components/ClientDrawer'
+import { PrestationDrawer } from '@/components/PrestationDrawer'
 import { collection, addDoc, serverTimestamp, getDocs, query, where, doc, updateDoc, deleteDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { toast } from 'sonner'
@@ -40,6 +41,7 @@ export default function NouveauDevisPage() {
   // States
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [isClientDrawerOpen, setIsClientDrawerOpen] = useState(false)
+  const [isPrestationDrawerOpen, setIsPrestationDrawerOpen] = useState(false)
   const [clientSearch, setClientSearch] = useState('')
   const [showClientDropdown, setShowClientDropdown] = useState(false)
   const [showOptions, setShowOptions] = useState(true)
@@ -767,7 +769,7 @@ export default function NouveauDevisPage() {
             )}
 
             {/* Devis Details */}
-            <div className="grid grid-cols-3 gap-4 mt-14">
+            <div className="grid grid-cols-3 gap-4 mt-2">
               <div>
                 <Label className="text-xs font-medium text-gray-700">N° de devis</Label>
                 <Input 
@@ -920,7 +922,7 @@ export default function NouveauDevisPage() {
                         
                         {/* Global discount line for rapide mode */}
                         {options.remiseGlobale && (
-                          <tr className="border-t bg-blue-50">
+                          <tr className="border-t-2 border-gray-300 bg-blue-50">
                             <td className="p-2 border-r border-gray-200 font-medium text-sm">
                               Remise globale
                             </td>
@@ -1138,10 +1140,13 @@ export default function NouveauDevisPage() {
                         
                         {/* Global discount line for complet mode */}
                         {options.remiseGlobale && (
-                          <tr className="border-t bg-blue-50">
+                          <tr className="border-t-2 border-gray-300 bg-blue-50">
                             <td className="p-2 border-r border-gray-200 font-medium text-sm">
                               Remise globale
                             </td>
+                            <td className="p-2 border-r border-gray-200"></td>
+                            <td className="p-2 border-r border-gray-200"></td>
+                            <td className="p-2 border-r border-gray-200"></td>
                             <td className="p-2 border-r border-gray-200 text-center">
                               <div className="flex items-center justify-center gap-1">
                                 <Input
@@ -1171,9 +1176,6 @@ export default function NouveauDevisPage() {
                                 <span className="text-xs text-gray-500">%</span>
                               </div>
                             </td>
-                            <td className="p-2 border-r border-gray-200"></td>
-                            <td className="p-2 border-r border-gray-200"></td>
-                            <td className="p-2 border-r border-gray-200"></td>
                             <td className="p-2 text-center text-sm font-medium">
                               -{remiseHT.toFixed(2)}
                             </td>
@@ -1195,11 +1197,13 @@ export default function NouveauDevisPage() {
                 </div>
                 <div className="w-px bg-green-300 h-6"></div>
                 <div className="relative">
-                  <Select onValueChange={(value) => {
+                  <Select value="" onValueChange={(value) => {
                     if (value === 'prestation') {
                       addLignePrestation()
                     } else if (value === 'designation') {
                       addLigneDesignation()
+                    } else if (value === 'create-prestation') {
+                      setIsPrestationDrawerOpen(true)
                     }
                   }}>
                     <SelectTrigger className="w-8 h-8 p-0 border-0 rounded-r-md hover:bg-green-50 focus:ring-0 opacity-0 absolute inset-0">
@@ -1208,6 +1212,13 @@ export default function NouveauDevisPage() {
                     <SelectContent>
                       <SelectItem value="prestation">Ligne de prestation type</SelectItem>
                       <SelectItem value="designation">Ligne de désignation</SelectItem>
+                      <Separator className="my-1" />
+                      <SelectItem value="create-prestation">
+                        <div className="flex items-center text-blue-600">
+                          <Plus className="w-4 h-4 mr-2" />
+                          Créer une prestation type
+                        </div>
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                   <div className="w-8 h-8 rounded-r-md hover:bg-green-50 flex items-center justify-center pointer-events-none">
@@ -1298,17 +1309,6 @@ export default function NouveauDevisPage() {
                     className="w-3 h-3" 
                   />
                   <Label htmlFor="complet" className="text-xs">Complet</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <input 
-                    type="radio" 
-                    id="electronique" 
-                    name="typeFacturation" 
-                    checked={options.typeFacturation === 'electronique'}
-                    onChange={() => setOptions(prev => ({ ...prev, typeFacturation: 'electronique' }))}
-                    className="w-3 h-3" 
-                  />
-                  <Label htmlFor="electronique" className="text-xs">Format électronique</Label>
                 </div>
               </div>
             </div>
@@ -1410,6 +1410,11 @@ export default function NouveauDevisPage() {
         open={isClientDrawerOpen} 
         onOpenChange={setIsClientDrawerOpen}
         editingClient={selectedClient}
+      />
+
+      <PrestationDrawer 
+        open={isPrestationDrawerOpen} 
+        onOpenChange={setIsPrestationDrawerOpen}
       />
 
     </div>
