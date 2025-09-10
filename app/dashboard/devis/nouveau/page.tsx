@@ -7,13 +7,14 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Separator } from '@/components/ui/separator'
-import { X, Upload, Plus, Trash2, Settings, FileText, Calendar, ArrowRight, ChevronDown } from 'lucide-react'
+import { X, Upload, Plus, Trash2, Settings, FileText, Calendar, ArrowRight, ChevronDown, MoreHorizontal } from 'lucide-react'
 import DevisFooter from '@/components/DevisFooter'
 import { useAuth } from '@/hooks/useAuth'
 import { useClients, Client } from '@/hooks/useClients'
 import { useRouter } from 'next/navigation'
 import { ClientDrawer } from '@/components/ClientDrawer'
 import { PrestationDrawer } from '@/components/PrestationDrawer'
+import { PrestationsListDrawer } from '@/components/PrestationsListDrawer'
 import { collection, addDoc, serverTimestamp, getDocs, query, where, doc, updateDoc, deleteDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { toast } from 'sonner'
@@ -42,6 +43,7 @@ export default function NouveauDevisPage() {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [isClientDrawerOpen, setIsClientDrawerOpen] = useState(false)
   const [isPrestationDrawerOpen, setIsPrestationDrawerOpen] = useState(false)
+  const [isPrestationsListOpen, setIsPrestationsListOpen] = useState(false)
   const [clientSearch, setClientSearch] = useState('')
   const [showClientDropdown, setShowClientDropdown] = useState(false)
   const [showOptions, setShowOptions] = useState(true)
@@ -94,6 +96,9 @@ export default function NouveauDevisPage() {
       isDesignationOnly: false
     }
   ])
+
+  // State for editing line with prestations
+  const [editingLineId, setEditingLineId] = useState<string | null>(null)
   
   // Options
   const [options, setOptions] = useState({
@@ -906,14 +911,27 @@ export default function NouveauDevisPage() {
                                   }}
                                   className="border-0 shadow-none p-0 h-auto focus-visible:ring-0 text-right text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                 />
-                                {lignes.length > 1 && (
+                                <div className="absolute -right-6 top-1/2 -translate-y-1/2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20">
                                   <button
-                                    onClick={() => removeLigne(ligne.id)}
-                                    className="absolute -right-6 top-1/2 -translate-y-1/2 h-6 w-6 p-0 bg-white border border-gray-200 shadow-sm hover:bg-red-50 hover:border-red-200 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20"
+                                    onClick={() => {
+                                      setEditingLineId(ligne.id)
+                                      setIsPrestationsListOpen(true)
+                                    }}
+                                    className="h-6 w-6 p-0 bg-white border border-gray-200 shadow-sm hover:bg-blue-50 hover:border-blue-200 rounded flex items-center justify-center"
+                                    title="Choisir une prestation type"
                                   >
-                                    <Trash2 className="w-3 h-3 text-gray-500 hover:text-red-500" />
+                                    <MoreHorizontal className="w-3 h-3 text-gray-500 hover:text-blue-500" />
                                   </button>
-                                )}
+                                  {lignes.length > 1 && (
+                                    <button
+                                      onClick={() => removeLigne(ligne.id)}
+                                      className="h-6 w-6 p-0 bg-white border border-gray-200 shadow-sm hover:bg-red-50 hover:border-red-200 rounded flex items-center justify-center"
+                                      title="Supprimer la ligne"
+                                    >
+                                      <Trash2 className="w-3 h-3 text-gray-500 hover:text-red-500" />
+                                    </button>
+                                  )}
+                                </div>
                               </td>
                             </>
                           )}
@@ -975,7 +993,7 @@ export default function NouveauDevisPage() {
                           <th className="text-center p-2 font-medium text-gray-700 w-16 text-xs border-r border-gray-200">Unité</th>
                           <th className="text-center p-2 font-medium text-gray-700 w-20 text-xs border-r border-gray-200">Prix unitaire</th>
                           <th className="text-center p-2 font-medium text-gray-700 w-16 text-xs border-r border-gray-200">TVA</th>
-                          <th className="text-right p-2 font-medium text-gray-700 w-20 text-xs">Montant HT</th>
+                          <th className="text-center p-2 font-medium text-gray-700 w-20 text-xs">Montant HT</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1124,14 +1142,27 @@ export default function NouveauDevisPage() {
                                   className="border-0 shadow-none p-0 h-auto focus-visible:ring-0 text-center text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                   readOnly
                                 />
-                                {lignes.length > 1 && (
+                                <div className="absolute -right-6 top-1/2 -translate-y-1/2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20">
                                   <button
-                                    onClick={() => removeLigne(ligne.id)}
-                                    className="absolute -right-6 top-1/2 -translate-y-1/2 h-6 w-6 p-0 bg-white border border-gray-200 shadow-sm hover:bg-red-50 hover:border-red-200 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20"
+                                    onClick={() => {
+                                      setEditingLineId(ligne.id)
+                                      setIsPrestationsListOpen(true)
+                                    }}
+                                    className="h-6 w-6 p-0 bg-white border border-gray-200 shadow-sm hover:bg-blue-50 hover:border-blue-200 rounded flex items-center justify-center"
+                                    title="Choisir une prestation type"
                                   >
-                                    <Trash2 className="w-3 h-3 text-gray-500 hover:text-red-500" />
+                                    <MoreHorizontal className="w-3 h-3 text-gray-500 hover:text-blue-500" />
                                   </button>
-                                )}
+                                  {lignes.length > 1 && (
+                                    <button
+                                      onClick={() => removeLigne(ligne.id)}
+                                      className="h-6 w-6 p-0 bg-white border border-gray-200 shadow-sm hover:bg-red-50 hover:border-red-200 rounded flex items-center justify-center"
+                                      title="Supprimer la ligne"
+                                    >
+                                      <Trash2 className="w-3 h-3 text-gray-500 hover:text-red-500" />
+                                    </button>
+                                  )}
+                                </div>
                               </td>
                             </>
                           )}
@@ -1202,6 +1233,8 @@ export default function NouveauDevisPage() {
                       addLignePrestation()
                     } else if (value === 'designation') {
                       addLigneDesignation()
+                    } else if (value === 'prestations-list') {
+                      setIsPrestationsListOpen(true)
                     } else if (value === 'create-prestation') {
                       setIsPrestationDrawerOpen(true)
                     }
@@ -1212,6 +1245,9 @@ export default function NouveauDevisPage() {
                     <SelectContent>
                       <SelectItem value="prestation">Ligne de prestation type</SelectItem>
                       <SelectItem value="designation">Ligne de désignation</SelectItem>
+                      <SelectItem value="prestations-list">
+                          Prestations types
+                      </SelectItem>
                       <Separator className="my-1" />
                       <SelectItem value="create-prestation">
                         <div className="flex items-center text-blue-600">
@@ -1415,6 +1451,50 @@ export default function NouveauDevisPage() {
       <PrestationDrawer 
         open={isPrestationDrawerOpen} 
         onOpenChange={setIsPrestationDrawerOpen}
+      />
+
+      <PrestationsListDrawer 
+        open={isPrestationsListOpen} 
+        onOpenChange={setIsPrestationsListOpen}
+        onSelectPrestation={(prestation) => {
+          if (editingLineId) {
+            // Remplacer la ligne existante
+            setLignes(prev => prev.map(ligne => 
+              ligne.id === editingLineId 
+                ? {
+                    ...ligne,
+                    designation: prestation.designation,
+                    unite: prestation.unite,
+                    prixUnitaireHT: prestation.prixUnitaire,
+                    montantHT: prestation.prixUnitaire * ligne.quantite,
+                    tauxTVA: prestation.tauxTVA,
+                    typePrestation: prestation.type === 'prestation' ? 'Presta' : 'Biens'
+                  }
+                : ligne
+            ))
+            setEditingLineId(null)
+          } else {
+            // Ajouter la prestation sélectionnée comme nouvelle ligne
+            const newLine: DevisLine = {
+              id: Date.now().toString(),
+              designation: prestation.designation,
+              quantite: 1,
+              unite: prestation.unite,
+              prixUnitaireHT: prestation.prixUnitaire,
+              remise: 0,
+              montantHT: prestation.prixUnitaire,
+              tauxTVA: prestation.tauxTVA,
+              typePrestation: prestation.type === 'prestation' ? 'Presta' : 'Biens',
+              isDesignationOnly: false
+            }
+            setLignes(prev => [...prev, newLine])
+          }
+        }}
+        onEditPrestation={(prestation) => {
+          setIsPrestationsListOpen(false)
+          // Ouvrir le PrestationDrawer en mode édition
+          setIsPrestationDrawerOpen(true)
+        }}
       />
 
     </div>
