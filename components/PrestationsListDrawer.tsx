@@ -52,7 +52,7 @@ export function PrestationsListDrawer({
   const [searchTerm, setSearchTerm] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
-  // Fetch prestations from Firebase
+  // Fetch prestations from Firebase                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
   const fetchPrestations = async () => {
     if (!user) {
       console.log('❌ Pas d\'utilisateur connecté')
