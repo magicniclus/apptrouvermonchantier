@@ -93,8 +93,8 @@ export default function DevisFooter({ className = '', showConditions = true, sho
         // Use custom company info if exists, otherwise use built default from database
         setCustomCompanyInfo(mainClientData.customCompanyInfo || defaultCompanyInfo.join(' - '))
         
-        // Set free field content
-        setFreeFieldContent(mainClientData.freeFieldContent || '')
+        // Set free field content - default to empty
+        setFreeFieldContent('')
       }
     } catch (error) {
       console.error('Error loading company info:', error)
