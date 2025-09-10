@@ -101,10 +101,27 @@ export default function NouveauDevisPage() {
     siretClient: false,
     tvaIntracommunautaire: false,
     conditionsAcceptation: true,
-    champSignature: true,
     intituleDocument: false,
     champLibre: false,
     remiseGlobale: false
+  })
+
+  // Delivery address state
+  const [adresseLivraison, setAdresseLivraison] = useState({
+    adresse: '',
+    complementAdresse: '',
+    codePostal: '',
+    ville: '',
+    pays: 'France'
+  })
+
+  // Document title state
+  const [intituleDocument, setIntituleDocument] = useState('')
+
+  // Global discount state
+  const [remiseGlobale, setRemiseGlobale] = useState({
+    pourcentage: 0,
+    montant: 0
   })
 
   // Filtered clients for dropdown
@@ -117,13 +134,18 @@ export default function NouveauDevisPage() {
 
   // Calculate totals
   const calculateTotals = () => {
-    const totalHT = lignes.reduce((sum, ligne) => sum + ligne.montantHT, 0)
-    const totalTVA = lignes.reduce((sum, ligne) => sum + (ligne.montantHT * ligne.tauxTVA / 100), 0)
+    const sousTotal = lignes.reduce((sum, ligne) => sum + ligne.montantHT, 0)
+    const remiseHT = options.remiseGlobale ? (sousTotal * remiseGlobale.pourcentage / 100) : 0
+    const totalHT = sousTotal - remiseHT
+    const totalTVA = lignes.reduce((sum, ligne) => {
+      const ligneHT = ligne.montantHT
+      return sum + (ligneHT * ligne.tauxTVA / 100)
+    }, 0) - (remiseHT * 0.2) // Apply discount to TVA as well
     const totalTTC = totalHT + totalTVA
-    return { totalHT, totalTVA, totalTTC }
+    return { sousTotal, remiseHT, totalHT, totalTVA, totalTTC }
   }
 
-  const { totalHT, totalTVA, totalTTC } = calculateTotals()
+  const { sousTotal, remiseHT, totalHT, totalTVA, totalTTC } = calculateTotals()
   
   // Vérifier si toutes les TVA sont à 0%
   const allTVAZero = lignes.every(ligne => ligne.tauxTVA === 0)
@@ -563,6 +585,47 @@ export default function NouveauDevisPage() {
                     {clientData?.codePostal || '33100'} {clientData?.ville || 'BORDEAUX FR'}
                   </div>
                 </div>
+
+                {/* Delivery Address Section - Conditional */}
+                {options.adresseLivraison && (
+                  <div className="mt-6">
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">Adresse de livraison</h4>
+                    <div className="space-y-2 max-w-xs">
+                      <Input
+                        placeholder="Adresse"
+                        value={adresseLivraison.adresse}
+                        onChange={(e) => setAdresseLivraison(prev => ({ ...prev, adresse: e.target.value }))}
+                        className="h-7 text-xs"
+                      />
+                      <Input
+                        placeholder="Complément d'adresse"
+                        value={adresseLivraison.complementAdresse}
+                        onChange={(e) => setAdresseLivraison(prev => ({ ...prev, complementAdresse: e.target.value }))}
+                        className="h-7 text-xs"
+                      />
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Code postal"
+                          value={adresseLivraison.codePostal}
+                          onChange={(e) => setAdresseLivraison(prev => ({ ...prev, codePostal: e.target.value }))}
+                          className="h-7 text-xs w-20"
+                        />
+                        <Input
+                          placeholder="Ville"
+                          value={adresseLivraison.ville}
+                          onChange={(e) => setAdresseLivraison(prev => ({ ...prev, ville: e.target.value }))}
+                          className="h-7 text-xs flex-1"
+                        />
+                      </div>
+                      <Input
+                        placeholder="Pays"
+                        value={adresseLivraison.pays}
+                        onChange={(e) => setAdresseLivraison(prev => ({ ...prev, pays: e.target.value }))}
+                        className="h-7 text-xs"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
               
               {/* Client Info Section - Top Right */}
@@ -665,9 +728,43 @@ export default function NouveauDevisPage() {
                     className="h-8 text-sm flex-2"
                   />
                 </div>
+
+                {/* SIREN/SIRET Field - Conditional */}
+                {options.siretClient && (
+                  <div className="mt-3">
+                    <Label className="text-xs font-medium text-gray-700">SIREN</Label>
+                    <Input
+                      placeholder="SIREN ou SIRET"
+                      className="h-8 text-sm mt-1"
+                    />
+                  </div>
+                )}
+
+                {/* TVA Intracommunautaire Field - Conditional */}
+                {options.tvaIntracommunautaire && (
+                  <div className="mt-3">
+                    <Label className="text-xs font-medium text-gray-700">TVA intracommunautaire</Label>
+                    <Input
+                      placeholder="Numéro"
+                      className="h-8 text-sm mt-1"
+                    />
+                  </div>
+                )}
               </div>
             </div>
 
+
+            {/* Document Title - Conditional */}
+            {options.intituleDocument && (
+              <div className="mt-8 mb-6">
+                <Input
+                  value={intituleDocument}
+                  onChange={(e) => setIntituleDocument(e.target.value)}
+                  className="text-start text-lg font-bold border-0 bg-transparent focus:bg-white focus:border focus:border-blue-200 px-2 py-1"
+                  placeholder="Intitulé du devis"
+                />
+              </div>
+            )}
 
             {/* Devis Details */}
             <div className="grid grid-cols-3 gap-4 mt-14">
@@ -790,10 +887,22 @@ export default function NouveauDevisPage() {
                               </td>
                               <td className="p-2 relative">
                                 <Input
-                                  type="number"
-                                  value={ligne.prixUnitaireHT}
-                                  onChange={(e) => updateLigne(ligne.id, 'prixUnitaireHT', parseFloat(e.target.value) || 0)}
-                                  className="border-0 shadow-none p-0 h-auto focus-visible:ring-0 text-right text-xs"
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={ligne.prixUnitaireHT === 0 ? '' : ligne.prixUnitaireHT.toString()}
+                                  onChange={(e) => {
+                                    const value = e.target.value
+                                    if (/^[0-9.,]*$/.test(value)) {
+                                      const numValue = value === '' ? 0 : parseFloat(value.replace(',', '.')) || 0
+                                      updateLigne(ligne.id, 'prixUnitaireHT', numValue)
+                                    }
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                                      e.preventDefault()
+                                    }
+                                  }}
+                                  className="border-0 shadow-none p-0 h-auto focus-visible:ring-0 text-right text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                 />
                                 {lignes.length > 1 && (
                                   <button
@@ -808,6 +917,47 @@ export default function NouveauDevisPage() {
                           )}
                         </tr>
                         ))}
+                        
+                        {/* Global discount line for rapide mode */}
+                        {options.remiseGlobale && (
+                          <tr className="border-t bg-blue-50">
+                            <td className="p-2 border-r border-gray-200 font-medium text-sm">
+                              Remise globale
+                            </td>
+                            <td className="p-2 border-r border-gray-200 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <Input
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={remiseGlobale.pourcentage === 0 ? '' : remiseGlobale.pourcentage.toString()}
+                                  onChange={(e) => {
+                                    const value = e.target.value
+                                    if (/^[0-9.,]*$/.test(value)) {
+                                      const numValue = value === '' ? 0 : parseFloat(value.replace(',', '.')) || 0
+                                      if (numValue <= 100) {
+                                        setRemiseGlobale(prev => ({
+                                          ...prev,
+                                          pourcentage: numValue
+                                        }))
+                                      }
+                                    }
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                                      e.preventDefault()
+                                    }
+                                  }}
+                                  className="w-12 h-6 text-xs text-center border-0 shadow-none p-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                  placeholder="0"
+                                />
+                                <span className="text-xs text-gray-500">%</span>
+                              </div>
+                            </td>
+                            <td className="p-2 text-center text-sm font-medium">
+                              -{remiseHT.toFixed(2)}
+                            </td>
+                          </tr>
+                        )}
                     </tbody>
                   </table>
                 </div>
@@ -937,14 +1087,12 @@ export default function NouveauDevisPage() {
                                   value={ligne.prixUnitaireHT === 0 ? '' : ligne.prixUnitaireHT.toString()}
                                   onChange={(e) => {
                                     const value = e.target.value
-                                    // Permettre seulement chiffres, +, -, et virgule
-                                    if (/^[0-9+,\-]*$/.test(value)) {
+                                    if (/^[0-9.,]*$/.test(value)) {
                                       const numValue = value === '' ? 0 : parseFloat(value.replace(',', '.')) || 0
                                       updateLigne(ligne.id, 'prixUnitaireHT', numValue)
                                     }
                                   }}
                                   onKeyDown={(e) => {
-                                    // Empêcher les flèches haut/bas
                                     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
                                       e.preventDefault()
                                     }
@@ -987,6 +1135,50 @@ export default function NouveauDevisPage() {
                           )}
                         </tr>
                         ))}
+                        
+                        {/* Global discount line for complet mode */}
+                        {options.remiseGlobale && (
+                          <tr className="border-t bg-blue-50">
+                            <td className="p-2 border-r border-gray-200 font-medium text-sm">
+                              Remise globale
+                            </td>
+                            <td className="p-2 border-r border-gray-200 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <Input
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={remiseGlobale.pourcentage === 0 ? '' : remiseGlobale.pourcentage.toString()}
+                                  onChange={(e) => {
+                                    const value = e.target.value
+                                    if (/^[0-9.,]*$/.test(value)) {
+                                      const numValue = value === '' ? 0 : parseFloat(value.replace(',', '.')) || 0
+                                      if (numValue <= 100) {
+                                        setRemiseGlobale(prev => ({
+                                          ...prev,
+                                          pourcentage: numValue
+                                        }))
+                                      }
+                                    }
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                                      e.preventDefault()
+                                    }
+                                  }}
+                                  className="w-12 h-6 text-xs text-center border-0 shadow-none p-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                  placeholder="0"
+                                />
+                                <span className="text-xs text-gray-500">%</span>
+                              </div>
+                            </td>
+                            <td className="p-2 border-r border-gray-200"></td>
+                            <td className="p-2 border-r border-gray-200"></td>
+                            <td className="p-2 border-r border-gray-200"></td>
+                            <td className="p-2 text-center text-sm font-medium">
+                              -{remiseHT.toFixed(2)}
+                            </td>
+                          </tr>
+                        )}
                     </tbody>
                   </table>
                 </div>
@@ -1027,15 +1219,38 @@ export default function NouveauDevisPage() {
 
             {/* Totals */}
             <div className="space-y-2 text-right border-t pt-4">
-              <div className={`flex justify-between ${allTVAZero ? 'text-lg font-bold text-blue-600' : 'text-xs'}`}>
-                <span className={allTVAZero ? '' : 'text-gray-600'}>Total HT</span>
-                <span className={allTVAZero ? '' : 'font-medium'}>{totalHT.toFixed(2)} €</span>
-              </div>
-              {!allTVAZero && (
-                <div className="flex justify-between text-lg font-bold text-blue-600">
-                  <span>Total TTC</span>
-                  <span>{totalTTC.toFixed(2)} €</span>
+              {options.remiseGlobale && remiseHT > 0 ? (
+                <>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-600">Sous-total HT</span>
+                    <span className="font-medium">{sousTotal.toFixed(2)} €</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-600">Remise HT</span>
+                    <span className="font-medium">-{remiseHT.toFixed(2)} €</span>
+                  </div>
+                  <div className={`flex justify-between ${allTVAZero ? 'text-lg font-bold text-blue-600' : 'text-xs'}`}>
+                    <span className={allTVAZero ? '' : 'text-gray-600'}>Total HT</span>
+                    <span className={allTVAZero ? '' : 'font-medium'}>{totalHT.toFixed(2)} €</span>
+                  </div>
+                </>
+              ) : (
+                <div className={`flex justify-between ${allTVAZero ? 'text-lg font-bold text-blue-600' : 'text-xs'}`}>
+                  <span className={allTVAZero ? '' : 'text-gray-600'}>Total HT</span>
+                  <span className={allTVAZero ? '' : 'font-medium'}>{totalHT.toFixed(2)} €</span>
                 </div>
+              )}
+              {!allTVAZero && (
+                <>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-600">TVA</span>
+                    <span className="font-medium">{totalTVA.toFixed(2)} €</span>
+                  </div>
+                  <div className="flex justify-between text-lg font-bold text-blue-600 border-t pt-2">
+                    <span>Total TTC</span>
+                    <span>{totalTTC.toFixed(2)} €</span>
+                  </div>
+                </>
               )}
             </div>
 
@@ -1043,7 +1258,10 @@ export default function NouveauDevisPage() {
             <div className="flex-grow"></div>
             
             {/* Footer with legal text and company info */}
-            <DevisFooter />
+            <DevisFooter 
+              showConditions={options.conditionsAcceptation} 
+              showFreeField={options.champLibre}
+            />
           </div>
           
           {/* Options Card - Positioned at top right of A4 sheet */}
@@ -1142,15 +1360,6 @@ export default function NouveauDevisPage() {
                     className="w-3 h-3" 
                   />
                   <Label htmlFor="conditionsAcceptation" className="text-xs">Conditions d'acceptation</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox 
-                    id="champSignature" 
-                    checked={options.champSignature} 
-                    onCheckedChange={(checked) => setOptions(prev => ({ ...prev, champSignature: checked as boolean }))}
-                    className="w-3 h-3" 
-                  />
-                  <Label htmlFor="champSignature" className="text-xs">Champ signature</Label>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Checkbox 
