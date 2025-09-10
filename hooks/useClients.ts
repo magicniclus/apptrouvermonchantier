@@ -22,6 +22,9 @@ export interface Client {
   commentaires: string
   dateCreation: any
   status: string
+  siret?: string
+  numeroTVA?: string
+  codeAPE?: string
 }
 
 export function useClients() {
