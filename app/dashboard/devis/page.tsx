@@ -7,7 +7,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { FileText, Plus, Search, Filter, Eye, Edit, Calendar, Euro } from 'lucide-react'
+import { FileText, Plus, Search, Filter, Eye, Edit, Calendar, Euro, Download, Copy, Trash2, MoreHorizontal } from 'lucide-react'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { useAuth } from '@/hooks/useAuth'
 import Loader, { PulseLoader } from '@/components/ui/loader'
 import { useRouter } from 'next/navigation'
@@ -15,10 +18,12 @@ import { useDevis, Devis } from '@/hooks/useDevis'
 
 export default function DevisPage() {
   const { user, clientData, loading: authLoading } = useAuth()
-  const { devis, loading: devisLoading } = useDevis()
+  const { devis, loading: devisLoading, updateDevis, deleteDevis } = useDevis()
   const router = useRouter()
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [devisToDelete, setDevisToDelete] = useState<string | null>(null)
 
   console.log('📋 DevisPage render:', {
     user: user?.uid,
@@ -66,9 +71,9 @@ export default function DevisPage() {
   // Filtrer les devis selon le terme de recherche et le statut
   const filteredDevis = devis.filter((devisItem: Devis) => {
     const matchesSearch = 
-      devisItem.numeroDevis.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      devisItem.clientNom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      devisItem.clientEmail.toLowerCase().includes(searchTerm.toLowerCase())
+      (devisItem.numeroDevis || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (devisItem.clientNom || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (devisItem.clientEmail || '').toLowerCase().includes(searchTerm.toLowerCase())
     
     const matchesStatus = filterStatus === 'all' || devisItem.statut === filterStatus
     
@@ -105,6 +110,49 @@ export default function DevisPage() {
       style: 'currency',
       currency: 'EUR'
     }).format(amount)
+  }
+
+  const handleStatusChange = async (devisId: string, newStatus: string) => {
+    try {
+      await updateDevis(devisId, { statut: newStatus as any })
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour du statut:', error)
+    }
+  }
+
+  const handleViewDevis = (devisId: string) => {
+    router.push(`/dashboard/devis/${devisId}`)
+  }
+
+  const handleDownloadPDF = (devisId: string) => {
+    // TODO: Implement PDF download
+    console.log('Download PDF for devis:', devisId)
+  }
+
+  const handleDuplicateDevis = async (devis: Devis) => {
+    try {
+      // TODO: Implement duplication logic
+      console.log('Duplicate devis:', devis.id)
+    } catch (error) {
+      console.error('Erreur lors de la duplication:', error)
+    }
+  }
+
+  const handleDeleteDevis = (devisId: string) => {
+    setDevisToDelete(devisId)
+    setShowDeleteModal(true)
+  }
+
+  const confirmDeleteDevis = async () => {
+    if (devisToDelete) {
+      try {
+        await deleteDevis(devisToDelete)
+        setShowDeleteModal(false)
+        setDevisToDelete(null)
+      } catch (error) {
+        console.error('Erreur lors de la suppression:', error)
+      }
+    }
   }
 
   if (!user || !clientData) {
@@ -179,19 +227,20 @@ export default function DevisPage() {
                     className="pl-10"
                   />
                 </div>
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-md bg-white dark:bg-gray-800 dark:border-gray-600"
-                >
-                  <option value="all">Tous les statuts</option>
-                  <option value="brouillon">Brouillon</option>
-                  <option value="envoye">Envoyé</option>
-                  <option value="accepte">Accepté</option>
-                  <option value="refuse">Refusé</option>
-                  <option value="expire">Expiré</option>
-                  <option value="facture">Facturé</option>
-                </select>
+                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="Filtrer par statut" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tous les statuts</SelectItem>
+                    <SelectItem value="brouillon">Brouillon</SelectItem>
+                    <SelectItem value="envoye">Envoyé</SelectItem>
+                    <SelectItem value="accepte">Accepté</SelectItem>
+                    <SelectItem value="refuse">Refusé</SelectItem>
+                    <SelectItem value="expire">Expiré</SelectItem>
+                    <SelectItem value="facture">Facturé</SelectItem>
+                  </SelectContent>
+                </Select>
                 <Button asChild className="cursor-pointer">
                   <a href="/dashboard/devis/nouveau">
                     <Plus className="w-4 h-4 mr-2" />
@@ -247,29 +296,53 @@ export default function DevisPage() {
                               </div>
                             </TableCell>
                             <TableCell>
-                              {getStatusBadge(devisItem.statut)}
+                              <Select 
+                                value={devisItem.statut} 
+                                onValueChange={(value) => handleStatusChange(devisItem.id, value)}
+                              >
+                                <SelectTrigger className="w-32">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="brouillon">Brouillon</SelectItem>
+                                  <SelectItem value="envoye">Envoyé</SelectItem>
+                                  <SelectItem value="accepte">Accepté</SelectItem>
+                                  <SelectItem value="refuse">Refusé</SelectItem>
+                                  <SelectItem value="expire">Expiré</SelectItem>
+                                  <SelectItem value="facture">Facturé</SelectItem>
+                                </SelectContent>
+                              </Select>
                             </TableCell>
                             <TableCell>
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => {/* TODO: View devis details */}}
-                                  className="flex items-center gap-2"
-                                >
-                                  <Eye className="w-4 h-4" />
-                                  Voir
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => {/* TODO: Edit devis */}}
-                                  className="flex items-center gap-2"
-                                >
-                                  <Edit className="w-4 h-4" />
-                                  Modifier
-                                </Button>
-                              </div>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" className="h-8 w-8 p-0">
+                                    <span className="sr-only">Ouvrir le menu</span>
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => handleViewDevis(devisItem.id)}>
+                                    <Eye className="mr-2 h-4 w-4" />
+                                    Voir
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleDownloadPDF(devisItem.id)}>
+                                    <Download className="mr-2 h-4 w-4" />
+                                    Télécharger PDF
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleDuplicateDevis(devisItem)}>
+                                    <Copy className="mr-2 h-4 w-4" />
+                                    Dupliquer
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem 
+                                    onClick={() => handleDeleteDevis(devisItem.id)}
+                                    className="text-red-600"
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Supprimer
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -282,6 +355,29 @@ export default function DevisPage() {
           )}
         </motion.div>
       </div>
+
+      {/* Modal de confirmation de suppression */}
+      <AlertDialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer le devis</AlertDialogTitle>
+            <AlertDialogDescription>
+              Êtes-vous sûr de vouloir supprimer ce devis ? Cette action est irréversible.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowDeleteModal(false)}>
+              Annuler
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmDeleteDevis}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Supprimer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   )
 }
