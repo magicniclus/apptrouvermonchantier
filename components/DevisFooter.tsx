@@ -245,39 +245,41 @@ export default function DevisFooter({ className = '', showConditions = true, sho
   return (
     <div className={`border-t border-gray-200 pt-4 mt-6 ${className}`}>
       <div className="relative">
-        {/* Edit button */}
-        <div className="absolute -top-2 -right-2">
-          {!isEditing ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsEditing(true)}
-              className="h-6 w-6 p-0 hover:bg-gray-100"
-            >
-              <Edit3 className="w-3 h-3" />
-            </Button>
-          ) : (
-            <div className="flex gap-1">
+        {/* Edit button - only show when conditions are enabled */}
+        {showConditions && (
+          <div className="absolute -top-2 -right-2">
+            {!isEditing ? (
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={saveCustomContent}
-                disabled={saving}
-                className="h-6 w-6 p-0 hover:bg-green-100"
+                onClick={() => setIsEditing(true)}
+                className="h-6 w-6 p-0 hover:bg-gray-100"
               >
-                <Save className="w-3 h-3 text-green-600" />
+                <Edit3 className="w-3 h-3" />
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleCancel}
-                className="h-6 w-6 p-0 hover:bg-red-100"
-              >
-                <X className="w-3 h-3 text-red-600" />
-              </Button>
-            </div>
-          )}
-        </div>
+            ) : (
+              <div className="flex gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={saveCustomContent}
+                  disabled={saving}
+                  className="h-6 w-6 p-0 hover:bg-green-100"
+                >
+                  <Save className="w-3 h-3 text-green-600" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCancel}
+                  className="h-6 w-6 p-0 hover:bg-red-100"
+                >
+                  <X className="w-3 h-3 text-red-600" />
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Content */}
         <div className="pr-8">
