@@ -26,6 +26,183 @@ service cloud.firestore {
 }
 ```
 
+## Structure des Collections
+
+### Collection `clients`
+
+Structure principale pour les clients avec gestion hiérarchique :
+
+```
+clients/
+├── {mainClientId}/
+│   ├── uid: string (Firebase Auth UID)
+│   ├── uidclient: string (identique à uid pour le client principal)
+│   ├── nom: string
+│   ├── prenom: string
+│   ├── email: string
+│   ├── telephone: string
+│   ├── adresse: string
+│   ├── codePostal: string
+│   ├── ville: string
+│   ├── pays: string
+│   ├── typeClient: "particulier" | "entreprise"
+│   ├── nomEntreprise?: string (si typeClient === "entreprise")
+│   ├── siret?: string
+│   ├── numeroTVA?: string
+│   ├── codeAPE?: string
+│   ├── status: "actif" | "inactif"
+│   ├── isPrimary: boolean (true pour le client principal)
+│   ├── role: "admin" | "user" | "viewer"
+│   ├── dateCreation: Timestamp
+│   ├── dateModification?: Timestamp
+│   ├── creePar: string (UID du créateur)
+│   ├── modifiePar?: string (UID du modificateur)
+│   ├── customFooterContent?: string
+│   ├── customCompanyInfo?: string
+│   ├── freeFieldContent?: string
+│   └── clients/
+│       └── {clientId}/
+│           ├── uidclient: string (UID du client principal)
+│           ├── nom: string
+│           ├── prenom: string
+│           ├── email: string
+│           ├── telephone: string
+│           ├── adresse: string
+│           ├── codePostal: string
+│           ├── ville: string
+│           ├── pays: string
+│           ├── typeClient: "particulier" | "entreprise"
+│           ├── nomEntreprise?: string
+│           ├── siret?: string
+│           ├── numeroTVA?: string
+│           ├── codeAPE?: string
+│           ├── status: "actif" | "inactif"
+│           ├── dateCreation: Timestamp
+│           ├── dateModification?: Timestamp
+│           ├── creePar: string
+│           └── modifiePar?: string
+```
+
+### Collection `devis` - Devis et brouillons
+
+Structure pour les devis et brouillons dans le dossier utilisateur :
+
+```
+clients/
+└── {mainClientId}/
+    └── devis/
+        └── {brouillonId}/
+            ├── dateCreation: string | Timestamp
+                ├── dateValidite: Date
+                ├── validiteDuree: number
+                ├── validiteTexte: string
+                ├── clientId: string | null
+                ├── clientNom: string
+                ├── clientEmail: string
+                ├── clientSiret?: string
+                ├── clientNumeroTVA?: string
+                ├── clientCodeAPE?: string
+                ├── lignes: Array<{
+                │   id: string
+                │   designation: string
+                │   quantite: number
+                │   unite?: string
+                │   prixUnitaireHT: number
+                │   remise: number
+                │   montantHT: number
+                │   tauxTVA: number
+                │   typePrestation: "Presta" | "Biens"
+                │   isDesignationOnly: boolean
+                │ }>
+                ├── montantTotalHT: number
+                ├── montantTotalTVA: number
+                ├── montantTotalTTC: number
+                ├── status: "brouillon"
+                ├── type: "devis"
+                ├── conditions: string
+                ├── notes: string
+                ├── options: {
+                │   typeFacturation: "rapide" | "complet"
+                │   formatElectronique: string
+                │   adresseLivraison: boolean
+                │   siretClient: boolean
+                │   tvaIntracommunautaire: boolean
+                │   conditionsAcceptation: boolean
+                │   intituleDocument: boolean
+                │   champLibre: boolean
+                │   remiseGlobale: boolean
+                │ }
+                ├── adresseLivraison?: {
+                │   adresse: string
+                │   complementAdresse: string
+                │   codePostal: string
+                │   ville: string
+                │   pays: string
+                │ }
+                ├── intituleDocument?: string
+                ├── remiseGlobale?: {
+                │   pourcentage: number
+                │   montant: number
+                │ }
+                ├── uidclient: string (UID du propriétaire)
+                ├── mainClientId: string (ID du client principal)
+                └── lastModified: Timestamp
+    ├── clientEmail: string
+    ├── lignes: Array<{
+    │   id: string
+    │   designation: string
+    │   quantite: number
+    │   unite?: string
+    │   prixUnitaireHT: number
+    │   remise: number
+    │   montantHT: number
+    │   tauxTVA: number
+    │   typePrestation: "Presta" | "Biens"
+    │   isDesignationOnly: boolean
+    │ }>
+    ├── montantTotalHT: number
+    ├── montantTotalTVA: number
+    ├── montantTotalTTC: number
+    ├── status: "brouillon"
+    ├── type: "devis"
+    ├── conditions: string
+    ├── notes: string
+    ├── options: {
+    │   typeFacturation: "rapide" | "complet"
+    │   formatElectronique: string
+    │   adresseLivraison: boolean
+    │   siretClient: boolean
+    │   tvaIntracommunautaire: boolean
+    │   conditionsAcceptation: boolean
+    │   intituleDocument: boolean
+    │   champLibre: boolean
+    │   remiseGlobale: boolean
+    │ }
+    ├── adresseLivraison?: {
+    │   adresse: string
+    │   complementAdresse: string
+    │   codePostal: string
+    │   ville: string
+    │   pays: string
+    │ }
+    ├── intituleDocument?: string
+    ├── remiseGlobale?: {
+    │   pourcentage: number
+    │   montant: number
+    │ }
+    ├── uidclient: string (UID du propriétaire)
+    ├── mainClientId: string (ID du client principal)
+    └── lastModified: Timestamp
+```
+
+**Fonctionnement des brouillons :**
+- Structure hiérarchique `clients/{mainClientId}/devis/brouillons/{brouillonId}`
+- `status: "brouillon"` - Sauvegarde manuelle uniquement
+- Premier clic "Sauvegarder en brouillon" : création d'un nouveau brouillon
+- Clics suivants : mise à jour du brouillon existant
+- Toutes les données du devis sont préservées (lignes, options, paramètres, totaux)
+- Filtrage par `uidclient` et `mainClientId` pour isoler les données utilisateur
+
 ## Système d'Invitation et Gestion des Utilisateurs
 
 ### SendGrid Email Invitation System
