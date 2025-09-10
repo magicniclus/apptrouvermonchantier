@@ -54,26 +54,39 @@ export interface Devis {
 export function useDevis() {
   const [devis, setDevis] = useState<Devis[]>([])
   const [loading, setLoading] = useState(true)
-  const { user, clientData } = useAuth()
+  const { user } = useAuth()
 
   const loadDevis = async () => {
-    if (!user || !clientData?.id) {
-      console.log('❌ useDevis: Pas d\'utilisateur ou de client data')
+    if (!user) {
+      console.log('❌ useDevis: Pas d\'utilisateur connecté')
       setLoading(false)
       return
     }
 
     try {
-      console.log('🔄 useDevis: Chargement des devis pour client:', clientData.id)
+      console.log('🔄 useDevis: Chargement des devis pour user:', user.uid)
       
-      // Requête pour récupérer tous les devis du client
-      const devisRef = collection(db, 'devis')
-      const q = query(
-        devisRef, 
-        where('clientPrincipalId', '==', clientData.id)
-      )
+      // Find main client document using uidclient
+      const clientsRef = collection(db, 'clients')
+      const clientsQuery = query(clientsRef, where('uidclient', '==', user.uid))
+      const clientsSnapshot = await getDocs(clientsQuery)
+
+      if (clientsSnapshot.empty) {
+        console.log('❌ Aucun client trouvé avec uidclient:', user.uid)
+        setDevis([])
+        setLoading(false)
+        return
+      }
+
+      const mainClientDoc = clientsSnapshot.docs[0]
+      const mainClientId = mainClientDoc.id
+      console.log('✅ Client principal trouvé avec ID:', mainClientId)
+
+      // Fetch devis from subcollection
+      const devisRef = collection(db, `clients/${mainClientId}/devis`)
+      console.log('🔍 Recherche des devis dans:', `clients/${mainClientId}/devis`)
       
-      const querySnapshot = await getDocs(q)
+      const querySnapshot = await getDocs(devisRef)
       console.log('📊 useDevis: Nombre de devis trouvés:', querySnapshot.size)
       
       const devisList: Devis[] = []
@@ -81,7 +94,31 @@ export function useDevis() {
         const data = doc.data()
         devisList.push({
           id: doc.id,
-          ...data
+          numeroDevis: data.numeroDevis || data.id,
+          clientId: data.clientId || '',
+          clientNom: data.clientNom || '',
+          clientEmail: data.clientEmail || '',
+          dateCreation: data.dateCreation,
+          dateValidite: data.dateValidite,
+          statut: data.status || 'brouillon', // Map status to statut
+          montantHT: data.montantTotalHT || 0,
+          montantTTC: data.montantTotalTTC || data.montantTotalHT || 0,
+          montantTVA: data.montantTotalTVA || 0,
+          tauxTVA: 20, // Default
+          devise: 'EUR',
+          validiteDuree: data.validiteDuree || 60,
+          adresseDevis: {
+            nom: data.clientNom || '',
+            adresse: '',
+            codePostal: '',
+            ville: '',
+            pays: 'France'
+          },
+          lignes: data.lignes || [],
+          conditions: data.conditions || '',
+          notes: data.notes || '',
+          envoye: data.status !== 'brouillon',
+          historique: []
         } as Devis)
       })
       
@@ -104,16 +141,27 @@ export function useDevis() {
 
   useEffect(() => {
     loadDevis()
-  }, [user, clientData])
+  }, [user])
 
   const createDevis = async (devisData: Omit<Devis, 'id'>) => {
-    if (!clientData?.id) return null
+    if (!user) return null
 
     try {
-      const devisRef = collection(db, 'devis')
+      // Find main client document using uidclient
+      const clientsRef = collection(db, 'clients')
+      const clientsQuery = query(clientsRef, where('uidclient', '==', user.uid))
+      const clientsSnapshot = await getDocs(clientsQuery)
+
+      if (clientsSnapshot.empty) {
+        throw new Error('Aucun client trouvé')
+      }
+
+      const mainClientDoc = clientsSnapshot.docs[0]
+      const mainClientId = mainClientDoc.id
+
+      const devisRef = collection(db, `clients/${mainClientId}/devis`)
       const docRef = await addDoc(devisRef, {
         ...devisData,
-        clientPrincipalId: clientData.id,
         dateCreation: new Date(),
         historique: [{
           date: new Date(),
@@ -132,8 +180,22 @@ export function useDevis() {
   }
 
   const updateDevis = async (devisId: string, updates: Partial<Devis>) => {
+    if (!user) return
+
     try {
-      const devisRef = doc(db, 'devis', devisId)
+      // Find main client document using uidclient
+      const clientsRef = collection(db, 'clients')
+      const clientsQuery = query(clientsRef, where('uidclient', '==', user.uid))
+      const clientsSnapshot = await getDocs(clientsQuery)
+
+      if (clientsSnapshot.empty) {
+        throw new Error('Aucun client trouvé')
+      }
+
+      const mainClientDoc = clientsSnapshot.docs[0]
+      const mainClientId = mainClientDoc.id
+
+      const devisRef = doc(db, `clients/${mainClientId}/devis`, devisId)
       await updateDoc(devisRef, {
         ...updates,
         dateModification: new Date()
@@ -147,8 +209,22 @@ export function useDevis() {
   }
 
   const deleteDevis = async (devisId: string) => {
+    if (!user) return
+
     try {
-      const devisRef = doc(db, 'devis', devisId)
+      // Find main client document using uidclient
+      const clientsRef = collection(db, 'clients')
+      const clientsQuery = query(clientsRef, where('uidclient', '==', user.uid))
+      const clientsSnapshot = await getDocs(clientsQuery)
+
+      if (clientsSnapshot.empty) {
+        throw new Error('Aucun client trouvé')
+      }
+
+      const mainClientDoc = clientsSnapshot.docs[0]
+      const mainClientId = mainClientDoc.id
+
+      const devisRef = doc(db, `clients/${mainClientId}/devis`, devisId)
       await deleteDoc(devisRef)
       
       await loadDevis() // Recharger la liste
