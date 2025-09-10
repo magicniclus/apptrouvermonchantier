@@ -1480,7 +1480,7 @@ export default function NouveauDevisPage() {
       {/* Fixed Bottom Buttons */}
       <div className="fixed bottom-0 left-0 right-0 bg-transparent p-4 flex justify-center gap-4 z-30">
         <Button 
-          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 cursor-pointer"
+          className="bg-blue-600 hover:shadow-lg transition-all duration-300 ease-in-out text-white px-6 py-3 cursor-pointer"
           onClick={sauvegarderBrouillon}
           size="lg"
           variant="outline"
