@@ -582,14 +582,14 @@ export default function NouveauDevisPage() {
         </div>
         
         {/* Center: Status */}
-        <div className="absolute left-1/2 transform -translate-x-1/2">
+        {/* <div className="absolute left-1/2 transform -translate-x-1/2">
           <span className="px-3 py-1 text-slate-500 text-xl font-medium rounded-full flex items-center gap-2">
             Brouillon
             {isAutoSaving && (
               <div className="w-3 h-3 border border-slate-400 border-t-transparent rounded-full animate-spin"></div>
             )}
           </span>
-        </div>
+        </div> */}
         
         {/* Right: Options toggle */}
         <Button 
