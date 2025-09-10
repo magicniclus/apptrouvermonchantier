@@ -11,6 +11,7 @@ import { X, Upload, Plus, Trash2, Settings, FileText, Calendar, ArrowRight, Chev
 import DevisFooter from '@/components/DevisFooter'
 import { useAuth } from '@/hooks/useAuth'
 import { useClients, Client } from '@/hooks/useClients'
+import { genererProchainNumero } from '@/lib/numerotation'
 import { useRouter } from 'next/navigation'
 import { ClientDrawer } from '@/components/ClientDrawer'
 import { PrestationDrawer } from '@/components/PrestationDrawer'
@@ -18,7 +19,6 @@ import { PrestationsListDrawer } from '@/components/PrestationsListDrawer'
 import { collection, addDoc, serverTimestamp, getDocs, query, where, doc, updateDoc, deleteDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { toast } from 'sonner'
-import { genererProchainNumero } from '@/lib/numerotation'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 
 interface DevisLine {
@@ -295,18 +295,29 @@ export default function NouveauDevisPage() {
       console.log('✅ Client principal trouvé:', mainClientDoc.id)
       console.log('📄 Données client:', mainClientDoc.data())
       
-      // Créer un brouillon sans numéro de devis
+      // Generate automatic numero devis
+      let numeroDevis = ''
+      try {
+        numeroDevis = await genererProchainNumero(user.uid, 'devis')
+        console.log('✅ Numéro de devis généré automatiquement:', numeroDevis)
+      } catch (error) {
+        console.error('❌ Erreur lors de la génération du numéro:', error)
+        // Continue without numero if generation fails
+      }
+
+      // Créer un brouillon avec numéro de devis automatique
       const brouillonData = {
         dateCreation: serverTimestamp(),
         dateValidite: new Date(devisData.dateValidite || new Date()),
         validiteDuree: devisData.validiteDuree,
         validiteTexte: devisData.validiteTexte || '',
         clientId: selectedClient?.id || null,
-        clientNom: selectedClient?.nom || '',
+        clientNom: selectedClient ? (selectedClient.typeClient === 'entreprise' ? selectedClient.nomEntreprise : `${selectedClient.nom} ${selectedClient.prenom}`) : '',
         clientEmail: selectedClient?.email || '',
         clientSiret: options.siretClient ? clientSiret : (selectedClient?.siret || ''),
         clientNumeroTVA: options.tvaIntracommunautaire ? clientNumeroTVA : (selectedClient?.numeroTVA || ''),
         clientCodeAPE: selectedClient?.codeAPE || '',
+        numeroDevis: numeroDevis,
         lignes: lignes || [],
         montantTotalHT: totalHT || 0,
         montantTotalTVA: totalTVA || 0,
@@ -367,6 +378,18 @@ export default function NouveauDevisPage() {
     try {
       console.log('Sauvegarde manuelle du brouillon:', brouillonId)
       
+      // Generate numero devis if not already present
+      let numeroDevis = devisData.numeroDevis
+      if (!numeroDevis && user?.uid) {
+        try {
+          numeroDevis = await genererProchainNumero(user.uid, 'devis')
+          console.log('Numéro de devis généré:', numeroDevis)
+        } catch (error) {
+          console.error('Erreur lors de la génération du numéro:', error)
+          // Continue without numero if generation fails
+        }
+      }
+      
       const brouillonData = {
         dateCreation: devisData.dateCreation,
         dateValidite: new Date(devisData.dateValidite),
@@ -378,6 +401,9 @@ export default function NouveauDevisPage() {
         clientSiret: options.siretClient ? clientSiret : (selectedClient?.siret || ''),
         clientNumeroTVA: options.tvaIntracommunautaire ? clientNumeroTVA : (selectedClient?.numeroTVA || ''),
         clientCodeAPE: selectedClient?.codeAPE || '',
+        numeroDevis: numeroDevis,
+        status: 'brouillon',
+        type: 'devis',
         lignes: lignes.map(ligne => ({
           id: ligne.id,
           designation: ligne.designation,
@@ -399,6 +425,7 @@ export default function NouveauDevisPage() {
         adresseLivraison: options.adresseLivraison ? adresseLivraison : null,
         intituleDocument: options.intituleDocument ? intituleDocument : null,
         remiseGlobale: options.remiseGlobale ? remiseGlobale : null,
+        uidclient: user.uid,
         lastModified: serverTimestamp()
       }
 
