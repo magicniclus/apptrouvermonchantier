@@ -99,9 +99,9 @@ clients/
                 ├── clientId: string | null
                 ├── clientNom: string
                 ├── clientEmail: string
-                ├── clientSiret?: string
-                ├── clientNumeroTVA?: string
-                ├── clientCodeAPE?: string
+                ├── clientSiret?: string (du client ou saisie manuelle dans le devis)
+                ├── clientNumeroTVA?: string (du client ou saisie manuelle dans le devis)
+                ├── clientCodeAPE?: string (du client uniquement)
                 ├── lignes: Array<{
                 │   id: string
                 │   designation: string
