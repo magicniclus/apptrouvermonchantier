@@ -131,6 +131,23 @@ export default function NouveauDevisPage() {
     montant: 0
   })
 
+  // Manual client info state (like delivery address)
+  const [clientSiret, setClientSiret] = useState('')
+  const [clientNumeroTVA, setClientNumeroTVA] = useState('')
+
+  // Pre-populate SIRET and TVA when client is selected or options change
+  useEffect(() => {
+    if (selectedClient && options.siretClient && !clientSiret) {
+      setClientSiret(selectedClient.siret || '')
+    }
+  }, [selectedClient, options.siretClient])
+
+  useEffect(() => {
+    if (selectedClient && options.tvaIntracommunautaire && !clientNumeroTVA) {
+      setClientNumeroTVA(selectedClient.numeroTVA || '')
+    }
+  }, [selectedClient, options.tvaIntracommunautaire])
+
   // Filtered clients for dropdown
   const filteredClients = clients.filter(client =>
     client.nom.toLowerCase().includes(clientSearch.toLowerCase()) ||
@@ -287,8 +304,8 @@ export default function NouveauDevisPage() {
         clientId: selectedClient?.id || null,
         clientNom: selectedClient?.nom || '',
         clientEmail: selectedClient?.email || '',
-        clientSiret: selectedClient?.siret || '',
-        clientNumeroTVA: selectedClient?.numeroTVA || '',
+        clientSiret: options.siretClient ? clientSiret : (selectedClient?.siret || ''),
+        clientNumeroTVA: options.tvaIntracommunautaire ? clientNumeroTVA : (selectedClient?.numeroTVA || ''),
         clientCodeAPE: selectedClient?.codeAPE || '',
         lignes: lignes || [],
         montantTotalHT: totalHT || 0,
@@ -358,8 +375,8 @@ export default function NouveauDevisPage() {
         clientId: selectedClient?.id || null,
         clientNom: selectedClient ? (selectedClient.typeClient === 'entreprise' ? selectedClient.nomEntreprise : `${selectedClient.nom} ${selectedClient.prenom}`) : '',
         clientEmail: selectedClient?.email || '',
-        clientSiret: selectedClient?.siret || '',
-        clientNumeroTVA: selectedClient?.numeroTVA || '',
+        clientSiret: options.siretClient ? clientSiret : (selectedClient?.siret || ''),
+        clientNumeroTVA: options.tvaIntracommunautaire ? clientNumeroTVA : (selectedClient?.numeroTVA || ''),
         clientCodeAPE: selectedClient?.codeAPE || '',
         lignes: lignes.map(ligne => ({
           id: ligne.id,
@@ -765,9 +782,11 @@ export default function NouveauDevisPage() {
                 {/* SIREN/SIRET Field - Conditional */}
                 {options.siretClient && (
                   <div className="mt-3">
-                    <Label className="text-xs font-medium text-gray-700">SIREN</Label>
+                    <Label className="text-xs font-medium text-gray-700">SIRET</Label>
                     <Input
-                      placeholder="SIREN ou SIRET"
+                      value={clientSiret}
+                      onChange={(e) => setClientSiret(e.target.value)}
+                      placeholder="12345678901234"
                       className="h-8 text-sm mt-1"
                     />
                   </div>
@@ -778,7 +797,9 @@ export default function NouveauDevisPage() {
                   <div className="mt-3">
                     <Label className="text-xs font-medium text-gray-700">TVA intracommunautaire</Label>
                     <Input
-                      placeholder="Numéro"
+                      value={clientNumeroTVA}
+                      onChange={(e) => setClientNumeroTVA(e.target.value)}
+                      placeholder="FR12345678901"
                       className="h-8 text-sm mt-1"
                     />
                   </div>
