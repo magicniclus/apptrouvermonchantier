@@ -504,32 +504,67 @@ devis/{devisId}
     }>
 ```
 
-### 6. Collection: `articles`
-Catalogue d'articles/prestations pré-enregistrés.
+### 6. Collection: `prestations` (Prestations Types)
+Catalogue de prestations types pré-enregistrées par client.
 
+**STRUCTURE FIREBASE:**
 ```
-articles/{articleId}
-├── code: string (ex: "CHARP-001")
-├── designation: string
-├── description: string
-├── categorie: string ("Charpente", "Couverture", "Isolation", etc.)
-├── sousCategorie: string
-├── unite: string ("m²", "ml", "forfait", "heure", etc.)
-├── prixUnitaireHT: number
-├── tauxTVA: number
-├── actif: boolean
+clients/{mainClientId}/prestations/{prestationId}
+├── code: string (ex: "MAIN-H", "ELEC-INST") - Optionnel
+├── designation: string (ex: "Main d'œuvre électricien qualifié") - OBLIGATOIRE
+├── prixUnitaire: number (prix unitaire HT) - OBLIGATOIRE
+├── unite: string ("heure", "jour", "forfait", "m²", etc.)
+├── type: string ("service" | "bien") - Type de prestation
+├── tauxTVA: number (0, 2.1, 5.5, 8.5, 10, 20)
 ├── dateCreation: timestamp
-├── dateModification: timestamp
-├── fournisseur: string|null
-├── reference: string|null
-├── stock: {
-│   ├── gestionStock: boolean
-│   ├── quantiteStock: number
-│   └── seuilAlerte: number
-│   }
-├── images: array<string> (URLs)
-└── notes: string
+├── dateModification: timestamp|null
+├── creePar: string (UID utilisateur créateur)
+├── modifiePar: string|null (UID utilisateur modificateur)
+└── status: string ("actif" | "inactif")
 ```
+
+**LOGIQUE D'ATTRIBUTION:**
+- Chaque client principal a sa propre sous-collection de prestations
+- Utilise la même logique que les clients : rechercher le document principal via `uidclient`
+- Stockage dans `clients/{mainClientId}/prestations/`
+
+**ALGORITHME D'ACCÈS:**
+```javascript
+// 1. Trouver le client principal
+const clientsRef = collection(db, 'clients')
+const clientsSnapshot = await getDocs(query(clientsRef, where('uidclient', '==', user.uid)))
+const mainClientDoc = clientsSnapshot.docs[0]
+const mainClientId = mainClientDoc.id
+
+// 2. Opérations sur les prestations
+const prestationsRef = collection(db, `clients/${mainClientId}/prestations`)
+
+// CRÉATION
+await addDoc(prestationsRef, prestationData)
+
+// LECTURE
+const prestationsSnapshot = await getDocs(prestationsRef)
+
+// MODIFICATION
+const prestationRef = doc(db, `clients/${mainClientId}/prestations`, prestationId)
+await updateDoc(prestationRef, updatedData)
+
+// SUPPRESSION
+await deleteDoc(prestationRef)
+```
+
+**VALIDATION:**
+- `designation` : obligatoire, non vide
+- `prixUnitaire` : obligatoire, > 0
+- `code` : optionnel, unique si fourni
+- `unite` : sélection parmi liste prédéfinie
+- `type` : "service" ou "bien"
+- `tauxTVA` : valeurs autorisées (0, 2.1, 5.5, 8.5, 10, 20)
+
+**INTÉGRATION AVEC DEVIS:**
+- Les prestations types peuvent être sélectionnées lors de la création de devis
+- Pré-remplissage automatique des champs (désignation, prix, unité, TVA)
+- Gain de temps et cohérence des tarifs
 
 ### 7. Collection: `clientsFacturation`
 Informations spécifiques à la facturation des clients.
