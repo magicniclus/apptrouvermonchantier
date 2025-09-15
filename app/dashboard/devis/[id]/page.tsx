@@ -21,6 +21,7 @@ import { db } from '@/lib/firebase'
 import { toast } from 'sonner'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { generateDevisPDF, previewDevisPDF } from '@/lib/pdf-generator'
+import { PulseLoader } from '@/components/ui/loader'
 
 interface DevisLine {
   id: string
@@ -827,7 +828,7 @@ export default function DevisDetailPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg">Chargement...</div>
+        <PulseLoader />
       </div>
     )
   }
