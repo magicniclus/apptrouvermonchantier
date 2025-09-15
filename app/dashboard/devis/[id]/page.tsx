@@ -1,25 +1,26 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
+import { useParams, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Separator } from '@/components/ui/separator'
-import { X, Upload, Plus, Trash2, Settings, FileText, Calendar, ArrowRight, ChevronDown, MoreHorizontal } from 'lucide-react'
+import { X, Upload, Plus, Trash2, Settings, FileText, Calendar, ArrowRight, ArrowLeft, ChevronDown, MoreHorizontal, Edit, Copy, Download, Eye } from 'lucide-react'
 import DevisFooter from '@/components/DevisFooter'
 import { useAuth } from '@/hooks/useAuth'
 import { useClients, Client } from '@/hooks/useClients'
 import { genererProchainNumero } from '@/lib/numerotation'
-import { useRouter } from 'next/navigation'
 import { ClientDrawer } from '@/components/ClientDrawer'
 import { PrestationDrawer } from '@/components/PrestationDrawer'
 import { PrestationsListDrawer } from '@/components/PrestationsListDrawer'
-import { collection, addDoc, serverTimestamp, getDocs, query, where, doc, updateDoc, deleteDoc } from 'firebase/firestore'
+import { collection, addDoc, serverTimestamp, getDocs, query, where, doc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { toast } from 'sonner'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { generateDevisPDF, previewDevisPDF } from '@/lib/pdf-generator'
 
 interface DevisLine {
   id: string
@@ -34,12 +35,15 @@ interface DevisLine {
   isDesignationOnly?: boolean
 }
 
-export default function NouveauDevisPage() {
+export default function DevisDetailPage() {
+  const params = useParams()
   const { user, clientData } = useAuth()
   const { clients } = useClients()
   const router = useRouter()
+  const [loading, setLoading] = useState(true)
+  const [devisDataFromDB, setDevisDataFromDB] = useState<any>(null)
   
-  // States
+  // States - Read-only mode
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [isClientDrawerOpen, setIsClientDrawerOpen] = useState(false)
   const [isPrestationDrawerOpen, setIsPrestationDrawerOpen] = useState(false)
@@ -47,6 +51,7 @@ export default function NouveauDevisPage() {
   const [clientSearch, setClientSearch] = useState('')
   const [showClientDropdown, setShowClientDropdown] = useState(false)
   const [showOptions, setShowOptions] = useState(true)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   
   // Devis data
   const [devisData, setDevisData] = useState({
@@ -56,8 +61,7 @@ export default function NouveauDevisPage() {
     validiteDuree: 60,
     conditions: '',
     notes: '',
-    validiteTexte: '60 jours', // Texte personnalisable pour la validité
-    conditionsAcceptation: 'Pour être accepté, le devis doit être daté, signé et suivi de la mention manuscrite « Bon pour accord ».'
+    validiteTexte: '60 jours' // Texte personnalisable pour la validité
   })
   
   // État pour le numéro de devis généré
@@ -66,22 +70,103 @@ export default function NouveauDevisPage() {
   const [brouillonId, setBrouillonId] = useState<string | null>(null)
   const [showExitModal, setShowExitModal] = useState(false)
   const [isAutoSaving, setIsAutoSaving] = useState(false)
-  
-  // Ref pour récupérer les states locaux du DevisFooter
-  const getLocalStatesRef = useRef<(() => { localConditionsAcceptation: string; localCustomCompanyInfo: string }) | null>(null)
 
-  // Initialize dates only
+  // Fetch devis data from Firebase
   useEffect(() => {
-    const today = new Date()
-    const validityDate = new Date(today)
-    validityDate.setDate(today.getDate() + devisData.validiteDuree)
-    
-    setDevisData(prev => ({
-      ...prev,
-      dateCreation: today.toISOString().split('T')[0],
-      dateValidite: validityDate.toISOString().split('T')[0]
-    }))
-  }, [devisData.validiteDuree])
+    if (!user || !params.id) return
+
+    const fetchDevis = async () => {
+      try {
+        setLoading(true)
+        // Find main client document using uidclient
+        const clientsQuery = query(
+          collection(db, 'clients'),
+          where('uidclient', '==', user.uid)
+        )
+        const clientsSnapshot = await getDocs(clientsQuery)
+        
+        if (clientsSnapshot.empty) {
+          console.error('No client document found for user:', user.uid)
+          setLoading(false)
+          return
+        }
+
+        const mainClientDoc = clientsSnapshot.docs[0]
+        console.log('Found main client document:', mainClientDoc.id)
+
+        // Get devis from subcollection
+        const devisDoc = await getDoc(doc(db, `clients/${mainClientDoc.id}/devis`, params.id as string))
+        
+        if (devisDoc.exists()) {
+          const devisDataFromDB = devisDoc.data()
+          setDevisDataFromDB(devisDataFromDB)
+          console.log('Fetched devis data:', devisDataFromDB)
+          
+          // Populate form data from database
+          setDevisData({
+            numeroDevis: devisDataFromDB.numeroDevis || '',
+            dateCreation: devisDataFromDB.dateCreation ? 
+              (devisDataFromDB.dateCreation.toDate ? devisDataFromDB.dateCreation.toDate().toISOString().split('T')[0] : devisDataFromDB.dateCreation) : '',
+            dateValidite: devisDataFromDB.dateValidite ? 
+              (devisDataFromDB.dateValidite.toDate ? devisDataFromDB.dateValidite.toDate().toISOString().split('T')[0] : devisDataFromDB.dateValidite) : '',
+            validiteDuree: devisDataFromDB.validiteDuree || 60,
+            conditions: devisDataFromDB.conditions || '',
+            notes: devisDataFromDB.notes || '',
+            validiteTexte: devisDataFromDB.validiteTexte || '60 jours'
+          })
+          
+          // Set lignes from database
+          if (devisDataFromDB.lignes) {
+            setLignes(devisDataFromDB.lignes)
+          }
+          
+          // Set options from database
+          if (devisDataFromDB.options) {
+            setOptions(devisDataFromDB.options)
+          }
+          
+          // Set other fields
+          if (devisDataFromDB.adresseLivraison) {
+            setAdresseLivraison(devisDataFromDB.adresseLivraison)
+          }
+          
+          if (devisDataFromDB.intituleDocument) {
+            setIntituleDocument(devisDataFromDB.intituleDocument)
+          }
+          
+          if (devisDataFromDB.remiseGlobale) {
+            setRemiseGlobale(devisDataFromDB.remiseGlobale)
+          }
+          
+          if (devisDataFromDB.clientSiret) {
+            setClientSiret(devisDataFromDB.clientSiret)
+          }
+          
+          if (devisDataFromDB.clientNumeroTVA) {
+            setClientNumeroTVA(devisDataFromDB.clientNumeroTVA)
+          }
+          
+          // Find and set selected client
+          if (devisDataFromDB.clientId) {
+            const client = clients.find(c => c.id === devisDataFromDB.clientId)
+            if (client) {
+              setSelectedClient(client)
+              setClientSearch(`${client.nom} ${client.prenom}`)
+            }
+          }
+          
+        } else {
+          console.error('Devis not found:', params.id)
+        }
+      } catch (error) {
+        console.error('Error fetching devis:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchDevis()
+  }, [user, params.id, clients])
   
   // Générer le numéro de devis  // Ne plus créer de brouillon automatiquement au chargement
   // Le brouillon sera créé uniquement lors de l'enregistrement
@@ -109,7 +194,7 @@ export default function NouveauDevisPage() {
     typeFacturation: 'rapide',
     formatElectronique: 'complet',
     adresseLivraison: false,
-    siretClient: true,
+    siretClient: false,
     tvaIntracommunautaire: false,
     conditionsAcceptation: true,
     intituleDocument: false,
@@ -309,9 +394,6 @@ export default function NouveauDevisPage() {
         // Continue without numero if generation fails
       }
 
-      // Récupérer les states locaux du DevisFooter
-      const localStates = getLocalStatesRef.current?.() || { localConditionsAcceptation: '', localCustomCompanyInfo: '' }
-      
       // Créer un brouillon avec numéro de devis automatique
       const brouillonData = {
         dateCreation: serverTimestamp(),
@@ -333,8 +415,6 @@ export default function NouveauDevisPage() {
         type: 'devis',
         conditions: devisData.conditions || '',
         notes: devisData.notes || '',
-        conditionsAcceptation: localStates.localConditionsAcceptation || devisData.conditionsAcceptation || 'Pour être accepté, le devis doit être daté, signé et suivi de la mention manuscrite « Bon pour accord ».',
-        customCompanyInfo: localStates.localCustomCompanyInfo || '',
         options: options,
         adresseLivraison: options.adresseLivraison ? adresseLivraison : null,
         intituleDocument: options.intituleDocument ? intituleDocument : null,
@@ -368,6 +448,77 @@ export default function NouveauDevisPage() {
     }
     
     console.log('=== FIN CRÉATION BROUILLON ===')
+  }
+
+  // Sauvegarder les modifications du devis
+  const sauvegarderDevis = async () => {
+    if (!user?.uid || !params.id) {
+      toast.error('Utilisateur non connecté ou devis non trouvé')
+      return
+    }
+
+    setIsAutoSaving(true)
+    try {
+      console.log('Sauvegarde des modifications du devis:', params.id)
+      
+      const devisDataToSave = {
+        dateCreation: devisData.dateCreation ? new Date(devisData.dateCreation) : serverTimestamp(),
+        dateValidite: devisData.dateValidite ? new Date(devisData.dateValidite) : new Date(),
+        validiteDuree: devisData.validiteDuree,
+        validiteTexte: devisData.validiteTexte,
+        clientId: selectedClient?.id || null,
+        clientNom: selectedClient ? (selectedClient.typeClient === 'entreprise' ? selectedClient.nomEntreprise : `${selectedClient.nom} ${selectedClient.prenom}`) : '',
+        clientEmail: selectedClient?.email || '',
+        clientSiret: options.siretClient ? clientSiret : (selectedClient?.siret || ''),
+        clientNumeroTVA: options.tvaIntracommunautaire ? clientNumeroTVA : (selectedClient?.numeroTVA || ''),
+        clientCodeAPE: selectedClient?.codeAPE || '',
+        numeroDevis: devisData.numeroDevis,
+        lignes: lignes.map(ligne => ({
+          id: ligne.id,
+          designation: ligne.designation,
+          quantite: ligne.quantite,
+          unite: ligne.unite,
+          prixUnitaireHT: ligne.prixUnitaireHT,
+          remise: ligne.remise,
+          montantHT: ligne.montantHT,
+          tauxTVA: ligne.tauxTVA,
+          typePrestation: ligne.typePrestation,
+          isDesignationOnly: ligne.isDesignationOnly
+        })),
+        montantTotalHT: totalHT,
+        montantTotalTVA: totalTVA,
+        montantTotalTTC: totalTTC,
+        conditions: devisData.conditions,
+        notes: devisData.notes,
+        options: options,
+        adresseLivraison: options.adresseLivraison ? adresseLivraison : null,
+        intituleDocument: options.intituleDocument ? intituleDocument : null,
+        remiseGlobale: options.remiseGlobale ? remiseGlobale : null,
+        lastModified: serverTimestamp()
+      }
+
+      console.log('Données à sauvegarder:', devisDataToSave)
+
+      // Find main client document
+      const clientsRef = collection(db, 'clients')
+      const clientsSnapshot = await getDocs(query(clientsRef, where('uidclient', '==', user.uid)))
+      
+      if (!clientsSnapshot.empty) {
+        const mainClientDoc = clientsSnapshot.docs[0]
+        const devisRef = doc(db, `clients/${mainClientDoc.id}/devis`, params.id as string)
+        await updateDoc(devisRef, devisDataToSave)
+        console.log('Devis sauvegardé avec succès')
+        toast.success('Modifications sauvegardées avec succès')
+      } else {
+        console.error('Client principal non trouvé pour la sauvegarde')
+        toast.error('Erreur lors de la sauvegarde')
+      }
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde:', error)
+      toast.error('Erreur lors de la sauvegarde des modifications')
+    } finally {
+      setIsAutoSaving(false)
+    }
   }
 
   // Sauvegarder manuellement le brouillon
@@ -430,7 +581,6 @@ export default function NouveauDevisPage() {
         montantTotalTTC: totalTTC,
         conditions: devisData.conditions,
         notes: devisData.notes,
-        conditionsAcceptation: devisData.conditionsAcceptation,
         options: options,
         adresseLivraison: options.adresseLivraison ? adresseLivraison : null,
         intituleDocument: options.intituleDocument ? intituleDocument : null,
@@ -503,104 +653,200 @@ export default function NouveauDevisPage() {
     router.push('/dashboard/devis')
   }
 
-  const handleSaveDevis = async () => {
-    if (!selectedClient) {
-      toast.error('Veuillez sélectionner un client')
-      return
-    }
+  const handleEdit = () => {
+    router.push(`/dashboard/devis/${params.id}/modifier`)
+  }
 
-    if (lignes.some(ligne => !ligne.designation.trim())) {
-      toast.error('Veuillez remplir toutes les désignations')
-      return
-    }
+  const handleDuplicate = () => {
+    // TODO: Implement duplicate functionality
+    console.log('Duplicate devis:', params.id)
+  }
 
+  const handleDownloadPDF = async () => {
     try {
-      if (!clientData?.id) {
-        toast.error('Erreur: données client manquantes')
-        return
-      }
+      // Sauvegarder les modifications avant de télécharger le PDF
+      await sauvegarderDevis()
       
-      // Générer le numéro de devis au moment de l'enregistrement
-      const numeroDevisGenere = await genererProchainNumero(clientData.id, 'devis')
-      
-      // Mettre à jour le brouillon existant avec le statut "enregistré" et le numéro
-      const devisToSave = {
-        numeroDevis: numeroDevisGenere, // Générer le numéro maintenant
-        dateCreation: serverTimestamp(),
-        dateValidite: new Date(devisData.dateValidite),
-        validiteDuree: devisData.validiteDuree,
-        validiteTexte: devisData.validiteTexte,
-        clientId: selectedClient.id,
-        clientNom: selectedClient.typeClient === 'entreprise' ? selectedClient.nomEntreprise : `${selectedClient.nom} ${selectedClient.prenom}`,
-        clientEmail: selectedClient.email,
+      const devisForPDF = {
+        numeroDevis: devisData.numeroDevis || '',
+        dateCreation: devisData.dateCreation || new Date().toISOString(),
+        validiteTexte: devisData.validiteTexte || '30 jours',
         lignes: lignes.map(ligne => ({
           designation: ligne.designation,
           quantite: ligne.quantite,
+          unite: ligne.unite || '',
           prixUnitaireHT: ligne.prixUnitaireHT,
-          remise: ligne.remise,
-          montantHT: ligne.montantHT,
-          tauxTVA: ligne.tauxTVA
+          tauxTVA: ligne.tauxTVA,
+          montantHT: ligne.montantHT
         })),
         montantTotalHT: totalHT,
         montantTotalTVA: totalTVA,
         montantTotalTTC: totalTTC,
-        status: 'enregistre', // Changer le statut du brouillon à enregistré
         conditions: devisData.conditions,
         notes: devisData.notes,
-        conditionsAcceptation: devisData.conditionsAcceptation,
         options: options,
-        uidclient: user?.uid
+        adresseLivraison: adresseLivraison,
+        remiseGlobale: options.remiseGlobale ? remiseGlobale : undefined,
+        sousTotal: options.remiseGlobale ? sousTotal : undefined,
+        remiseHT: options.remiseGlobale ? remiseHT : undefined
       }
 
-      if (brouillonId) {
-        // Mettre à jour le brouillon existant
-        const clientsRef = collection(db, 'clients')
-        const clientsSnapshot = await getDocs(query(clientsRef, where('uidclient', '==', user?.uid)))
-        
-        if (!clientsSnapshot.empty) {
-          const mainClientDoc = clientsSnapshot.docs[0]
-          const devisRef = doc(db, `clients/${mainClientDoc.id}/devis`, brouillonId)
-          await updateDoc(devisRef, devisToSave)
-          
-          toast.success('Devis enregistré avec succès')
-          router.push('/dashboard/devis')
-        } else {
-          toast.error('Erreur lors de l\'enregistrement du devis')
-        }
-      } else {
-        toast.error('Erreur: brouillon non trouvé')
+      const clientForPDF = {
+        typeClient: (selectedClient?.typeClient || 'particulier') as 'particulier' | 'entreprise',
+        nom: selectedClient?.nom,
+        prenom: selectedClient?.prenom,
+        nomEntreprise: selectedClient?.nomEntreprise,
+        adresse: selectedClient?.adresse,
+        complementAdresse: selectedClient?.complementAdresse,
+        codePostal: selectedClient?.codePostal,
+        ville: selectedClient?.ville,
+        pays: 'France',
+        siret: clientSiret,
+        numeroTVA: clientNumeroTVA
       }
+
+      const companyForPDF = {
+        nom: clientData?.nomEntreprise || clientData?.nom || 'Mon Entreprise',
+        formeJuridique: clientData?.formeJuridique,
+        adresseSiege: {
+          adresse: clientData?.adresseEntreprise || clientData?.adresse || '',
+          codePostal: clientData?.codePostal || '',
+          ville: clientData?.ville || ''
+        },
+        siret: clientData?.siret || '',
+        numeroTVA: clientData?.numeroTVA || '',
+        codeAPE: clientData?.codeAPE || '',
+        logo: clientData?.logoImage
+      }
+
+      await generateDevisPDF(devisForPDF, clientForPDF, companyForPDF)
+      toast.success('PDF téléchargé avec succès')
     } catch (error) {
-      console.error('Erreur lors de la sauvegarde:', error)
-      toast.error('Erreur lors de la création du devis')
+      console.error('Error generating PDF:', error)
+      toast.error('Erreur lors de la génération du PDF')
     }
   }
 
-  // Plus de sauvegarde automatique - uniquement manuelle
+  const handlePreviewPDF = async () => {
+    try {
+      // Sauvegarder les modifications avant de prévisualiser le PDF
+      await sauvegarderDevis()
+      
+      // Generate PDF as blob for preview
+      const devisForPDF = {
+        numeroDevis: devisData.numeroDevis || '',
+        dateCreation: devisData.dateCreation || new Date().toISOString(),
+        validiteTexte: devisData.validiteTexte || '30 jours',
+        lignes: lignes.map(ligne => ({
+          designation: ligne.designation,
+          quantite: ligne.quantite,
+          unite: ligne.unite || '',
+          prixUnitaireHT: ligne.prixUnitaireHT,
+          tauxTVA: ligne.tauxTVA,
+          montantHT: ligne.montantHT
+        })),
+        montantTotalHT: totalHT,
+        montantTotalTVA: totalTVA,
+        montantTotalTTC: totalTTC,
+        conditions: devisData.conditions,
+        notes: devisData.notes,
+        options: options,
+        adresseLivraison: adresseLivraison,
+        remiseGlobale: options.remiseGlobale ? remiseGlobale : undefined,
+        sousTotal: options.remiseGlobale ? sousTotal : undefined,
+        remiseHT: options.remiseGlobale ? remiseHT : undefined
+      }
+
+      const clientForPDF = {
+        typeClient: (selectedClient?.typeClient || 'particulier') as 'particulier' | 'entreprise',
+        nom: selectedClient?.nom,
+        prenom: selectedClient?.prenom,
+        nomEntreprise: selectedClient?.nomEntreprise,
+        adresse: selectedClient?.adresse,
+        complementAdresse: selectedClient?.complementAdresse,
+        codePostal: selectedClient?.codePostal,
+        ville: selectedClient?.ville,
+        pays: 'France',
+        siret: clientSiret,
+        numeroTVA: clientNumeroTVA
+      }
+
+      const companyForPDF = {
+        nom: clientData?.nomEntreprise || clientData?.nom || 'Mon Entreprise',
+        formeJuridique: clientData?.formeJuridique,
+        adresseSiege: {
+          adresse: clientData?.adresseEntreprise || clientData?.adresse || '',
+          codePostal: clientData?.codePostal || '',
+          ville: clientData?.ville || ''
+        },
+        siret: clientData?.siret || '',
+        numeroTVA: clientData?.numeroTVA || '',
+        codeAPE: clientData?.codeAPE || '',
+        logo: clientData?.logoImage
+      }
+
+      await previewDevisPDF(devisForPDF, clientForPDF, companyForPDF)
+      
+      toast.success('PDF généré avec succès')
+    } catch (error) {
+      console.error('Error previewing PDF:', error)
+      toast.error('Erreur lors de la prévisualisation du PDF')
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!user || !params.id) return
+
+    try {
+      // Find main client document using uidclient
+      const clientsQuery = query(
+        collection(db, 'clients'),
+        where('uidclient', '==', user.uid)
+      )
+      const clientsSnapshot = await getDocs(clientsQuery)
+      
+      if (clientsSnapshot.empty) {
+        console.error('No client document found for user:', user.uid)
+        return
+      }
+
+      const mainClientDoc = clientsSnapshot.docs[0]
+      
+      // Delete devis from subcollection
+      await deleteDoc(doc(db, `clients/${mainClientDoc.id}/devis`, params.id as string))
+      
+      console.log('Devis deleted successfully')
+      toast.success('Devis supprimé avec succès')
+      router.push('/dashboard/devis')
+    } catch (error) {
+      console.error('Error deleting devis:', error)
+      toast.error('Erreur lors de la suppression du devis')
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-lg">Chargement...</div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Modale de confirmation de fermeture */}
-      <AlertDialog open={showExitModal} onOpenChange={setShowExitModal}>
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Que souhaitez-vous faire avec ce devis ?</AlertDialogTitle>
+            <AlertDialogTitle>Supprimer le devis</AlertDialogTitle>
             <AlertDialogDescription>
-              Vous avez des modifications non finalisées. Voulez-vous conserver ce devis en brouillon ou le supprimer ?
+              Êtes-vous sûr de vouloir supprimer ce devis ? Cette action est irréversible.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setShowExitModal(false)}>
-              Annuler
-            </AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={confirmerSuppressionEtFermeture}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              Supprimer le brouillon
-            </AlertDialogAction>
-            <AlertDialogAction onClick={confirmerFermeture}>
-              Conserver en brouillon
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
+              Supprimer
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -611,34 +857,38 @@ export default function NouveauDevisPage() {
         {/* Gradient shadow underneath */}
         <div className="absolute -bottom-8 left-0 right-0 h-8 bg-gradient-to-b from-gray-50 to-transparent pointer-events-none z-10"></div>
         
-        {/* Left: Close button + Title */}
+        {/* Left: Back button + Title */}
         <div className="flex items-center gap-4">
-          <Button variant="ghost" className="cursor-pointer" size="sm" onClick={handleClose}>
-            <X className="w-4 h-4" />
+          <Button variant="ghost" className="cursor-pointer" size="sm" onClick={() => router.back()}>
+            <ArrowLeft className="w-4 h-4" />
           </Button>
-          <h1 className="text-lg font-medium text-gray-700">Nouveau devis</h1>
+          <h1 className="text-lg font-medium text-gray-700">Devis {devisData.numeroDevis}</h1>
         </div>
         
-        {/* Center: Status */}
-        {/* <div className="absolute left-1/2 transform -translate-x-1/2">
-          <span className="px-3 py-1 text-slate-500 text-xl font-medium rounded-full flex items-center gap-2">
-            Brouillon
-            {isAutoSaving && (
-              <div className="w-3 h-3 border border-slate-400 border-t-transparent rounded-full animate-spin"></div>
-            )}
-          </span>
-        </div> */}
-        
-        {/* Right: Options toggle */}
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={() => setShowOptions(!showOptions)}
-          className="cursor-pointer"
-        >
-          <Settings className="w-4 h-4 mr-2" />
-          Options
-        </Button>
+        {/* Right: Action buttons */}
+        <div className="flex items-center space-x-2">
+          <Button variant="outline" size="sm" onClick={handlePreviewPDF}>
+            <Eye className="h-4 w-4 mr-2" />
+            Aperçu PDF
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleDownloadPDF}>
+            <Download className="h-4 w-4 mr-2" />
+            Télécharger PDF
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setShowDeleteDialog(true)}>
+            <Trash2 className="h-4 w-4 mr-2" />
+            Supprimer
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setShowOptions(!showOptions)}
+            className="cursor-pointer"
+          >
+            <Settings className="w-4 h-4 mr-2" />
+            Options
+          </Button>
+        </div>
       </div>
 
       <div className="flex justify-center p-8 pb-24">
@@ -732,88 +982,34 @@ export default function NouveauDevisPage() {
                   <Input
                     placeholder="Nom du client"
                     value={clientSearch}
-                    onChange={(e) => {
-                      setClientSearch(e.target.value)
-                      setShowClientDropdown(true)
-                    }}
-                    onFocus={() => setShowClientDropdown(true)}
-                    className={`h-8 text-sm pr-8 ${!clientSearch ? 'bg-blue-50' : ''}`}
+                    readOnly
+                    className="h-8 text-sm pr-8 bg-gray-50"
                   />
-                  {(clientSearch || selectedClient) && (
-                    <button
-                      onClick={() => {
-                        setClientSearch('')
-                        setSelectedClient(null)
-                        setShowClientDropdown(false)
-                      }}
-                      className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  )}
-                  {showClientDropdown && (
-                    <div className="absolute top-full left-0 right-0 z-10 mt-1 max-h-60 overflow-y-auto bg-white border rounded-md shadow-lg">
-                      <div className="p-2">
-                        {filteredClients.length > 0 ? (
-                          <div className="space-y-1">
-                            {filteredClients.map((client) => (
-                              <div
-                                key={client.id}
-                                className="p-2 hover:bg-gray-100 cursor-pointer rounded"
-                                onClick={() => handleClientSelect(client)}
-                              >
-                                <div className="font-medium text-sm">
-                                  {client.typeClient === 'entreprise' ? client.nomEntreprise : `${client.nom} ${client.prenom}`}
-                                </div>
-                                <div className="text-xs text-gray-500">{client.email}</div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="p-2 text-sm">Aucun client trouvé</div>
-                        )}
-                        <Separator className="my-2" />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="w-full justify-start text-green-600"
-                          onClick={handleCreateClient}
-                        >
-                          <Plus className="w-4 h-4 mr-2" />
-                          Ajouter un client
-                        </Button>
-                      </div>
-                    </div>
-                  )}
                 </div>
                 <Input
                   placeholder="Adresse"
                   value={selectedClient?.adresse || ''}
-                  onChange={() => {}} // Controlled by selectedClient
-                  readOnly={!!selectedClient}
-                  className="h-8 text-sm"
+                  readOnly
+                  className="h-8 text-sm bg-gray-50"
                 />
                 <Input
                   placeholder="Complément d'adresse"
                   value={selectedClient?.complementAdresse || ''}
-                  onChange={() => {}} // Controlled by selectedClient
-                  readOnly={!!selectedClient}
-                  className="h-8 text-sm"
+                  readOnly
+                  className="h-8 text-sm bg-gray-50"
                 />
                 <div className="flex gap-2">
                   <Input
                     placeholder="Code postal"
                     value={selectedClient?.codePostal || ''}
-                    onChange={() => {}} // Controlled by selectedClient
-                    readOnly={!!selectedClient}
-                    className="h-8 text-sm flex-1"
+                    readOnly
+                    className="h-8 text-sm flex-1 bg-gray-50"
                   />
                   <Input
                     placeholder="Ville"
                     value={selectedClient?.ville || ''}
-                    onChange={() => {}} // Controlled by selectedClient
-                    readOnly={!!selectedClient}
-                    className="h-8 text-sm flex-2"
+                    readOnly
+                    className="h-8 text-sm flex-2 bg-gray-50"
                   />
                 </div>
 
@@ -823,9 +1019,9 @@ export default function NouveauDevisPage() {
                     <Label className="text-xs font-medium text-gray-700">SIRET</Label>
                     <Input
                       value={clientSiret}
-                      onChange={(e) => setClientSiret(e.target.value)}
+                      readOnly
                       placeholder="12345678901234"
-                      className="h-8 text-sm mt-1"
+                      className="h-8 text-sm mt-1 bg-gray-50"
                     />
                   </div>
                 )}
@@ -836,9 +1032,9 @@ export default function NouveauDevisPage() {
                     <Label className="text-xs font-medium text-gray-700">TVA intracommunautaire</Label>
                     <Input
                       value={clientNumeroTVA}
-                      onChange={(e) => setClientNumeroTVA(e.target.value)}
+                      readOnly
                       placeholder="FR12345678901"
-                      className="h-8 text-sm mt-1"
+                      className="h-8 text-sm mt-1 bg-gray-50"
                     />
                   </div>
                 )}
@@ -849,12 +1045,9 @@ export default function NouveauDevisPage() {
             {/* Document Title - Conditional */}
             {options.intituleDocument && (
               <div className="mt-8 mb-6">
-                <Input
-                  value={intituleDocument}
-                  onChange={(e) => setIntituleDocument(e.target.value)}
-                  className="text-start text-lg font-bold border-0 bg-transparent focus:bg-white focus:border focus:border-blue-200 px-2 py-1"
-                  placeholder="Intitulé du devis"
-                />
+                <div className="text-start text-lg font-bold px-2 py-1">
+                  {intituleDocument || 'DEVIS'}
+                </div>
               </div>
             )}
 
@@ -863,10 +1056,9 @@ export default function NouveauDevisPage() {
               <div>
                 <Label className="text-xs font-medium text-gray-700">N° de devis</Label>
                 <Input 
-                  value="Sera généré à l'enregistrement"
+                  value={devisData.numeroDevis || 'Non généré'}
                   readOnly 
-                  className="mt-1 h-8 text-sm bg-gray-50 text-gray-500 italic" 
-                  placeholder="Numéro généré automatiquement"
+                  className="mt-1 h-8 text-sm bg-gray-50 text-gray-500" 
                 />
               </div>
               <div>
@@ -874,8 +1066,8 @@ export default function NouveauDevisPage() {
                 <Input 
                   type="date" 
                   value={devisData.dateCreation}
-                  onChange={(e) => setDevisData(prev => ({ ...prev, dateCreation: e.target.value }))}
-                  className="mt-1 h-8 text-sm"
+                  readOnly
+                  className="mt-1 h-8 text-sm bg-gray-50"
                 />
               </div>
               <div>
@@ -883,8 +1075,8 @@ export default function NouveauDevisPage() {
                 <div className="flex items-center mt-1">
                   <Input 
                     value={devisData.validiteTexte}
-                    onChange={(e) => setDevisData(prev => ({ ...prev, validiteTexte: e.target.value }))}
-                    className="h-8 text-sm flex-1"
+                    readOnly
+                    className="h-8 text-sm flex-1 bg-gray-50"
                     placeholder="60 jours"
                   />
                 </div>
@@ -963,7 +1155,7 @@ export default function NouveauDevisPage() {
                                 />
                               </td>
                               <td className="p-2 border-r border-gray-200">
-                                <Select key={`tva-${ligne.id}`} value={ligne.tauxTVA.toString()} onValueChange={(value) => updateLigne(ligne.id, 'tauxTVA', parseFloat(value))}>
+                                <Select value={ligne.tauxTVA.toString()} onValueChange={(value) => updateLigne(ligne.id, 'tauxTVA', parseFloat(value))}>
                                   <SelectTrigger className="w-16 h-6 text-xs border-0 shadow-none p-1">
                                     <SelectValue />
                                   </SelectTrigger>
@@ -1206,7 +1398,7 @@ export default function NouveauDevisPage() {
                                 />
                               </td>
                               <td className="p-2 border-r border-gray-200">
-                                <Select key={`tva-${ligne.id}`} value={ligne.tauxTVA.toString()} onValueChange={(value) => updateLigne(ligne.id, 'tauxTVA', parseFloat(value))}>
+                                <Select value={ligne.tauxTVA.toString()} onValueChange={(value) => updateLigne(ligne.id, 'tauxTVA', parseFloat(value))}>
                                   <SelectTrigger className="w-16 h-6 text-xs border-0 shadow-none p-1">
                                     <SelectValue />
                                   </SelectTrigger>
@@ -1386,23 +1578,22 @@ export default function NouveauDevisPage() {
               )}
             </div>
 
-            
-
             {/* Spacer to push footer to bottom */}
             <div className="flex-grow"></div>
             
             {/* Footer with legal text and company info */}
             <DevisFooter 
-              showConditions={options.conditionsAcceptation}
+              showConditions={options.conditionsAcceptation} 
               showCompanyInfo={options.siretClient}
-              showFreeField={false}
-              customConditionsText={devisData.conditionsAcceptation}
-              devisId={brouillonId || "FORCE_DEVIS_MODE"}
-              devisConditionsAcceptation={devisData.conditionsAcceptation}
+              showFreeField={options.champLibre}
+              devisId={params.id as string}
+              devisConditionsAcceptation={devisDataFromDB?.conditionsAcceptation}
+              devisCustomCompanyInfo={devisDataFromDB?.customCompanyInfo}
+              customConditionsText={devisDataFromDB?.conditionsAcceptation}
               onConditionsChange={(newConditions) => {
-                setDevisData(prev => ({ ...prev, conditionsAcceptation: newConditions }))
+                // Sauvegarder directement dans Firebase dans clients/{idclient}/devis/{iddevis}/conditionsAcceptation
+                console.log('💾 Sauvegarde conditions dans devis:', newConditions)
               }}
-              onGetLocalStates={getLocalStatesRef}
             />
           </div>
           
@@ -1525,26 +1716,6 @@ export default function NouveauDevisPage() {
         </div>
       </div>
 
-      {/* Fixed Bottom Buttons */}
-      <div className="fixed bottom-0 left-0 right-0 bg-transparent p-4 flex justify-center gap-4 z-30">
-        <Button 
-          className="bg-blue-600 hover:shadow-lg transition-all duration-300 ease-in-out text-white px-6 py-3 cursor-pointer"
-          onClick={sauvegarderBrouillon}
-          size="lg"
-          variant="outline"
-        >
-          <FileText className="w-4 h-4 mr-2" />
-          Sauvegarder en brouillon
-        </Button>
-        <Button 
-          className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 cursor-pointer"
-          onClick={handleSaveDevis}
-          size="lg"
-        >
-          <FileText className="w-4 h-4 mr-2" />
-          Créer le devis
-        </Button>
-      </div>
 
       <ClientDrawer 
         open={isClientDrawerOpen} 
@@ -1600,6 +1771,19 @@ export default function NouveauDevisPage() {
           setIsPrestationDrawerOpen(true)
         }}
       />
+
+      {/* Fixed Bottom Button */}
+      <div className="fixed bottom-0 left-0 right-0 bg-transparent p-4 flex justify-center z-30">
+        <Button 
+          className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 cursor-pointer shadow-lg"
+          onClick={sauvegarderDevis}
+          size="lg"
+          disabled={isAutoSaving}
+        >
+          <FileText className="w-4 h-4 mr-2" />
+          {isAutoSaving ? 'Sauvegarde...' : 'Sauvegarder les modifications'}
+        </Button>
+      </div>
 
     </div>
   )

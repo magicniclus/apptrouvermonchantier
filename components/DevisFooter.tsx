@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore'
+import { doc, getDoc, updateDoc, collection, query, where, getDocs, serverTimestamp } from 'firebase/firestore'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Edit3, Save, X } from 'lucide-react'
@@ -29,9 +29,16 @@ interface DevisFooterProps {
   showConditions?: boolean
   showCompanyInfo?: boolean
   showFreeField?: boolean
+  customConditionsText?: string
+  devisId?: string
+  devisConditionsAcceptation?: string
+  devisCustomCompanyInfo?: string
+  onConditionsChange?: (newConditions: string) => void
+  onCompanyInfoChange?: (newCompanyInfo: string) => void
+  onGetLocalStates?: React.MutableRefObject<(() => { localConditionsAcceptation: string; localCustomCompanyInfo: string }) | null>
 }
 
-export default function DevisFooter({ className = '', showConditions = true, showCompanyInfo = true, showFreeField = false }: DevisFooterProps) {
+export default function DevisFooter({ className = '', showConditions = true, showCompanyInfo = true, showFreeField = false, customConditionsText, devisId, devisConditionsAcceptation, devisCustomCompanyInfo, onConditionsChange, onCompanyInfoChange, onGetLocalStates }: DevisFooterProps) {
   const { user } = useAuth()
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>({})
   const [isEditing, setIsEditing] = useState(false)
@@ -42,12 +49,26 @@ export default function DevisFooter({ className = '', showConditions = true, sho
   const [isEditingFreeField, setIsEditingFreeField] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  // État local pour les conditions modifiées dans un devis (sans jamais sauvegarder dans customFooterContent)
+  const [localConditionsAcceptation, setLocalConditionsAcceptation] = useState('')
+  // État local pour les informations d'entreprise modifiées dans un devis (sans jamais sauvegarder dans customCompanyInfo)
+  const [localCustomCompanyInfo, setLocalCustomCompanyInfo] = useState('')
 
   useEffect(() => {
     if (user?.uid) {
       loadCompanyInfo()
     }
   }, [user?.uid])
+
+  // Exposer les states locaux au parent via le callback
+  useEffect(() => {
+    if (onGetLocalStates) {
+      onGetLocalStates.current = () => ({
+        localConditionsAcceptation,
+        localCustomCompanyInfo
+      })
+    }
+  }, [localConditionsAcceptation, localCustomCompanyInfo, onGetLocalStates])
 
   const loadCompanyInfo = async () => {
     try {
@@ -76,7 +97,34 @@ export default function DevisFooter({ className = '', showConditions = true, sho
         }
         
         setCompanyInfo(clientInfo)
-        setCustomContent(clientInfo.customFooterContent || '')
+        
+        // Initialisation différente selon le contexte
+        if (devisId) {
+          // Mode devis : initialiser localConditionsAcceptation avec customFooterContent par défaut
+          // Si le devis a déjà des conditions spécifiques, les utiliser, sinon prendre customFooterContent
+          setLocalConditionsAcceptation(devisConditionsAcceptation || clientInfo.customFooterContent || '')
+          // Ne PAS initialiser customContent pour éviter de toucher au client racine
+          
+          // Initialiser localCustomCompanyInfo avec les données du devis ou de la racine
+          const defaultCompanyInfo = []
+          if (mainClientData.siret) {
+            defaultCompanyInfo.push(`SIREN ${mainClientData.siret}`)
+          }
+          if (mainClientData.codeAPE) {
+            defaultCompanyInfo.push(`NAF ${mainClientData.codeAPE}`)
+          }
+          if (mainClientData.numeroTVA) {
+            defaultCompanyInfo.push(`TVA intracommunautaire : ${mainClientData.numeroTVA}`)
+          }
+          
+          // Vérifier si le devis a des informations d'entreprise personnalisées
+          // Utiliser les infos du devis si elles existent, sinon les infos par défaut de la racine
+          setLocalCustomCompanyInfo(devisCustomCompanyInfo || defaultCompanyInfo.join(' - '))
+        } else {
+          // Mode paramètres : initialiser avec le contenu du client racine
+          const initialContent = clientInfo.customFooterContent === 'Pour être accepté, le devis doit être daté, signé et suivi de la mention manuscrite « Bon pour accord ».' ? '' : (clientInfo.customFooterContent || '')
+          setCustomContent(initialContent)
+        }
         
         // Build default company info from database values
         const defaultCompanyInfo = []
@@ -107,7 +155,49 @@ export default function DevisFooter({ className = '', showConditions = true, sho
     try {
       setSaving(true)
       
-      // Find main client document
+      console.log('🔍 DEBUG: devisId =', devisId)
+      console.log('🔍 DEBUG: typeof devisId =', typeof devisId)
+      console.log('🔍 DEBUG: !!devisId =', !!devisId)
+      
+      if (devisId && devisId !== "FORCE_DEVIS_MODE") {
+        // Mode édition devis existant : sauvegarder dans clients/{idclient}/devis/{iddevis}/conditionsAcceptation
+        console.log('💾 MODE ÉDITION DEVIS: Sauvegarde dans Firebase devis spécifique')
+        
+        const mainClientsQuery = query(
+          collection(db, 'clients'),
+          where('uidclient', '==', user?.uid)
+        )
+        const mainClientsSnapshot = await getDocs(mainClientsQuery)
+        
+        if (!mainClientsSnapshot.empty) {
+          const mainClientDoc = mainClientsSnapshot.docs[0]
+          const mainClientId = mainClientDoc.id
+          
+          const devisRef = doc(db, `clients/${mainClientId}/devis`, devisId)
+          await updateDoc(devisRef, {
+            conditionsAcceptation: localConditionsAcceptation,
+            lastModified: serverTimestamp()
+          })
+          
+          console.log('✅ Conditions sauvegardées dans le devis:', devisId)
+          if (onConditionsChange) {
+            onConditionsChange(localConditionsAcceptation)
+          }
+        }
+        
+        setIsEditing(false)
+        return
+      }
+      
+      if (devisId === "FORCE_DEVIS_MODE") {
+        // Mode création nouveau devis : modifications locales uniquement
+        console.log('🚫 MODE NOUVEAU DEVIS: Aucune sauvegarde Firebase - modifications locales uniquement')
+        setIsEditing(false)
+        return
+      }
+      
+      // Mode paramètres globaux uniquement : sauvegarder dans le client racine
+      console.log('💾 MODE PARAMÈTRES: Sauvegarde dans Firebase autorisée')
       const mainClientsQuery = query(
         collection(db, 'clients'),
         where('uidclient', '==', user?.uid)
@@ -118,13 +208,15 @@ export default function DevisFooter({ className = '', showConditions = true, sho
         const mainClientDoc = mainClientsSnapshot.docs[0]
         const mainClientId = mainClientDoc.id
         
-        // Update main client document with custom content
         const mainClientRef = doc(db, 'clients', mainClientId)
-        await updateDoc(mainClientRef, {
-          customFooterContent: customContent,
-          dateModification: new Date(),
-          modifiePar: user?.uid
-        })
+        const contentToSave = customContent.trim() === '' ? null : customContent
+        // PROTECTION ABSOLUE: Ne JAMAIS modifier customFooterContent
+        console.log('🚫 PROTECTION: customFooterContent ne sera JAMAIS modifié')
+        // await updateDoc(mainClientRef, {
+        //   customFooterContent: contentToSave,
+        //   dateModification: new Date(),
+        //   modifiePar: user?.uid
+        // })
         
         setCompanyInfo(prev => ({ ...prev, customFooterContent: customContent }))
         setIsEditing(false)
@@ -140,6 +232,41 @@ export default function DevisFooter({ className = '', showConditions = true, sho
     try {
       setSaving(true)
       
+      if (devisId && devisId !== "FORCE_DEVIS_MODE") {
+        // Mode édition devis existant : sauvegarder dans clients/{idclient}/devis/{iddevis}/customCompanyInfo
+        console.log('💾 MODE ÉDITION DEVIS: Sauvegarde customCompanyInfo dans Firebase devis spécifique')
+        
+        const mainClientsQuery = query(
+          collection(db, 'clients'),
+          where('uidclient', '==', user?.uid)
+        )
+        const mainClientsSnapshot = await getDocs(mainClientsQuery)
+        
+        if (!mainClientsSnapshot.empty) {
+          const mainClientDoc = mainClientsSnapshot.docs[0]
+          const mainClientId = mainClientDoc.id
+          
+          const devisRef = doc(db, `clients/${mainClientId}/devis`, devisId)
+          await updateDoc(devisRef, {
+            customCompanyInfo: localCustomCompanyInfo,
+            lastModified: serverTimestamp()
+          })
+          
+          console.log('✅ Informations entreprise sauvegardées dans le devis:', devisId)
+        }
+        
+        setIsEditingCompanyInfo(false)
+        return
+      }
+      
+      if (devisId === "FORCE_DEVIS_MODE") {
+        // Mode création nouveau devis : modifications locales uniquement
+        console.log('🚫 MODE NOUVEAU DEVIS: Aucune sauvegarde customCompanyInfo dans Firebase - modifications locales uniquement')
+        setIsEditingCompanyInfo(false)
+        return
+      }
+      
+      console.log('💾 MODE PARAMÈTRES: Sauvegarde customCompanyInfo dans Firebase')
       // Find main client document
       const mainClientsQuery = query(
         collection(db, 'clients'),
@@ -173,6 +300,14 @@ export default function DevisFooter({ className = '', showConditions = true, sho
     try {
       setSaving(true)
       
+      if (devisId) {
+        // Mode devis : JAMAIS sauvegarder dans Firebase
+        console.log('🚫 MODE DEVIS: Aucune sauvegarde freeFieldContent dans Firebase')
+        setIsEditingFreeField(false)
+        return // SORTIR IMMÉDIATEMENT
+      }
+      
+      console.log('💾 MODE PARAMÈTRES: Sauvegarde freeFieldContent dans Firebase')
       // Find main client document
       const mainClientsQuery = query(
         collection(db, 'clients'),
@@ -203,12 +338,24 @@ export default function DevisFooter({ className = '', showConditions = true, sho
   }
 
   const handleCancel = () => {
-    setCustomContent(companyInfo.customFooterContent || '')
+    if (devisId) {
+      // Mode devis : remettre les conditions locales à leur valeur initiale
+      setLocalConditionsAcceptation(devisConditionsAcceptation || '')
+    } else {
+      // Mode paramètres : remettre le contenu du client racine
+      setCustomContent(companyInfo.customFooterContent || '')
+    }
     setIsEditing(false)
   }
 
   const handleCancelCompanyInfo = () => {
-    setCustomCompanyInfo(companyInfo.customCompanyInfo || '')
+    if (devisId) {
+      // Mode devis : remettre les informations locales à leur valeur initiale
+      setLocalCustomCompanyInfo(companyInfo.customCompanyInfo || '')
+    } else {
+      // Mode paramètres : remettre le contenu du client racine
+      setCustomCompanyInfo(companyInfo.customCompanyInfo || '')
+    }
     setIsEditingCompanyInfo(false)
   }
 
@@ -239,8 +386,8 @@ export default function DevisFooter({ className = '', showConditions = true, sho
 
   const companyInfoLine = companyInfoParts.join(' - ')
 
-  // Use custom content if available, otherwise use default
-  const displayContent = companyInfo.customFooterContent || defaultLegalText
+  // Priorité d'affichage : conditions locales devis > texte par défaut
+  const displayContent = (devisId ? localConditionsAcceptation : companyInfo.customFooterContent) || defaultLegalText
 
   return (
     <div className={`border-t border-gray-200 pt-4 mt-6 ${className}`}>
@@ -286,14 +433,41 @@ export default function DevisFooter({ className = '', showConditions = true, sho
           {isEditing ? (
             <div className="space-y-3">
               <Textarea
-                value={customContent}
-                onChange={(e) => setCustomContent(e.target.value)}
+                value={devisId ? localConditionsAcceptation : customContent}
+                onChange={(e) => {
+                  if (devisId) {
+                    setLocalConditionsAcceptation(e.target.value)
+                    // NE PAS notifier le parent - garder les modifications locales uniquement
+                  } else {
+                    setCustomContent(e.target.value)
+                  }
+                }}
                 placeholder="Saisissez votre contenu personnalisé ou laissez vide pour utiliser le texte par défaut..."
                 className="min-h-[80px] text-xs resize-none"
                 disabled={saving}
               />
-              <div className="text-xs text-gray-500">
-                Laissez vide pour utiliser le texte par défaut : "{defaultLegalText}"
+              <div className="flex justify-between items-center">
+                <div className="text-xs text-gray-500">
+                  Laissez vide pour utiliser le texte par défaut
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (devisId) {
+                      setLocalConditionsAcceptation('')
+                      // NE PAS notifier le parent - garder les modifications locales uniquement
+                    } else {
+                      setCustomContent('')
+                    }
+                  }}
+                  className="h-6 text-xs px-2"
+                >
+                  Texte par défaut
+                </Button>
+              </div>
+              <div className="text-xs text-gray-400 italic">
+                "{defaultLegalText}"
               </div>
             </div>
           ) : (
@@ -413,8 +587,14 @@ export default function DevisFooter({ className = '', showConditions = true, sho
                     {isEditingCompanyInfo ? (
                       <div className="space-y-2">
                         <Textarea
-                          value={customCompanyInfo}
-                          onChange={(e) => setCustomCompanyInfo(e.target.value)}
+                          value={devisId ? localCustomCompanyInfo : customCompanyInfo}
+                          onChange={(e) => {
+                            if (devisId) {
+                              setLocalCustomCompanyInfo(e.target.value)
+                            } else {
+                              setCustomCompanyInfo(e.target.value)
+                            }
+                          }}
                           placeholder="SIREN 12456352987 - NAF 1234Z - TVA intracommunautaire : FR123456789012"
                           className="min-h-[60px] text-xs resize-none text-center"
                           disabled={saving}
@@ -425,7 +605,7 @@ export default function DevisFooter({ className = '', showConditions = true, sho
                       </div>
                     ) : (
                       <p className="text-xs text-gray-500 text-center">
-                        {customCompanyInfo}
+                        {devisId ? localCustomCompanyInfo : customCompanyInfo}
                       </p>
                     )}
                   </div>

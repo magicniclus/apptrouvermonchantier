@@ -278,7 +278,10 @@ export default function DevisPage() {
                               {devisItem.numeroDevis}
                             </TableCell>
                             <TableCell>
-                              <div>
+                              <div 
+                                className="cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors"
+                                onClick={() => handleViewDevis(devisItem.id)}
+                              >
                                 <div className="font-semibold">{devisItem.clientNom}</div>
                                 <div className="text-sm text-gray-500">{devisItem.clientEmail}</div>
                               </div>

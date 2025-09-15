@@ -39,6 +39,7 @@ export interface Devis {
   }>
   conditions: string
   notes: string
+  conditionsAcceptation?: string
   fichierPDF?: string
   envoye: boolean
   dateEnvoi?: any
@@ -117,6 +118,7 @@ export function useDevis() {
           lignes: data.lignes || [],
           conditions: data.conditions || '',
           notes: data.notes || '',
+          conditionsAcceptation: data.conditionsAcceptation || 'Pour être accepté, le devis doit être daté, signé et suivi de la mention manuscrite « Bon pour accord ».',
           envoye: data.status !== 'brouillon',
           historique: []
         } as Devis)
