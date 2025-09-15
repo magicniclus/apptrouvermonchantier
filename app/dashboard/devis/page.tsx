@@ -267,7 +267,11 @@ export default function DevisPage() {
                       </TableHeader>
                       <TableBody>
                         {filteredDevis.map((devisItem: Devis) => (
-                          <TableRow key={devisItem.id}>
+                          <TableRow 
+                            key={devisItem.id}
+                            className="cursor-pointer hover:bg-gray-50 transition-colors"
+                            onClick={() => handleViewDevis(devisItem.id)}
+                          >
                             <TableCell>
                               <div className="flex items-center gap-2">
                                 <Calendar className="w-4 h-4 text-gray-400" />
@@ -278,10 +282,7 @@ export default function DevisPage() {
                               {devisItem.numeroDevis}
                             </TableCell>
                             <TableCell>
-                              <div 
-                                className="cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors"
-                                onClick={() => handleViewDevis(devisItem.id)}
-                              >
+                              <div>
                                 <div className="font-semibold">{devisItem.clientNom}</div>
                                 <div className="text-sm text-gray-500">{devisItem.clientEmail}</div>
                               </div>
@@ -298,7 +299,7 @@ export default function DevisPage() {
                                 {formatAmount(devisItem.montantTTC)}
                               </div>
                             </TableCell>
-                            <TableCell>
+                            <TableCell onClick={(e) => e.stopPropagation()}>
                               <Select 
                                 value={devisItem.statut} 
                                 onValueChange={(value) => handleStatusChange(devisItem.id, value)}
@@ -316,7 +317,7 @@ export default function DevisPage() {
                                 </SelectContent>
                               </Select>
                             </TableCell>
-                            <TableCell>
+                            <TableCell onClick={(e) => e.stopPropagation()}>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button variant="ghost" className="h-8 w-8 p-0">
