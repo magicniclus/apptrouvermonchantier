@@ -6,6 +6,7 @@ interface DevisData {
   numeroDevis: string
   dateCreation: string
   validiteTexte: string
+  customCompanyInfo?: string
   lignes: LigneDevis[]
   montantTotalHT: number
   montantTotalTVA: number
@@ -13,10 +14,15 @@ interface DevisData {
   conditions?: string
   notes?: string
   conditionsAcceptation?: string
+  intituleDocument?: string
   options: {
+    typeFacturation: 'rapide' | 'complet'
     adresseLivraison: boolean
     conditionsAcceptation: boolean
     remiseGlobale: boolean
+    siretClient: boolean
+    tvaIntracommunautaire: boolean
+    intituleDocument: boolean
   }
   adresseLivraison?: {
     adresse: string
@@ -35,11 +41,13 @@ interface DevisData {
 
 interface LigneDevis {
   designation: string
+  description?: string
   quantite: number
   unite: string
   prixUnitaireHT: number
   tauxTVA: number
   montantHT: number
+  remise?: number
 }
 
 interface ClientData {
@@ -77,7 +85,7 @@ interface DevisPDFProps {
   company: CompanyInfo
 }
 
-// Styles modernisés
+// Styles fidèles au design web
 const styles = StyleSheet.create({
   page: {
     flexDirection: 'column',
@@ -88,67 +96,110 @@ const styles = StyleSheet.create({
     color: '#111827',
   },
 
-  // HEADER
+  // HEADER - Layout identique au web
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 24,
+    marginBottom: 20,
   },
-  logoSection: {
+  
+  // Section entreprise (gauche)
+  companySection: {
     width: '45%',
     flexDirection: 'column',
   },
   logoBox: {
-    width: 70,
-    height: 35,
+    width: 64,
+    height: 64,
     backgroundColor: '#f9fafb',
     borderRadius: 4,
+    border: '2px dashed #e5e7eb',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
+    marginBottom: 20,
   },
-  logo: { width: 60, height: 30 },
-  companyName: { fontSize: 11, fontWeight: 'bold', marginBottom: 2 },
-  companyDetails: { fontSize: 8, color: '#6b7280', lineHeight: 1.3 },
+  logo: { width: 60, height: 60, objectFit: 'contain' },
+  companyType: { 
+    fontSize: 10, 
+    color: '#6b7280', 
+    textTransform: 'uppercase',
+    fontWeight: 'bold',
+    marginBottom: 2,
+    marginTop: 2,
+    letterSpacing: 0.5
+  },
+  companyName: { 
+    fontSize: 16, 
+    fontWeight: 'bold', 
+    marginBottom: 2,
+    color: '#111827'
+  },
+  companyAddress: { 
+    fontSize: 12, 
+    color: '#4b5563', 
+    lineHeight: 1.3 
+  },
 
+  // Section client (droite)
   clientSection: {
     width: '50%',
     alignItems: 'flex-end',
-    marginTop: 70, // 👈 décale le bloc client plus bas
+    marginTop: 90,
+    marginBottom: 20
   },
   clientBox: {
-    // backgroundColor: '#f9fafb',
-    borderRadius: 4,
-    padding: 6,
     width: '100%',
+    paddingTop: 20,
   },
   clientName: {
-    fontSize: 10,
-    fontWeight: 'bold', // 👈 nom en gras
+    fontSize: 14,
+    fontWeight: 'bold',
     marginBottom: 4,
     textAlign: 'right',
+    color: '#111827',
   },
-  clientText: {
-    fontSize: 9,
+  clientAddress: {
+    fontSize: 12,
+    color: '#4b5563',
+    textAlign: 'right',
+    marginBottom: 2
+  },
+  clientSiret: {
+    fontSize: 12,
     color: '#111827',
     textAlign: 'right',
-    lineHeight: 1.4,
+    marginTop: 8,
+  },
+  clientInfoLabel: {
+    fontSize: 8,
+    color: '#6b7280',
+    fontWeight: 'light',
+    textAlign: 'right',
+    marginRight: 4,
+  },
+
+  clientTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 4,
+    textAlign: 'right',
+    color: '#111827',
   },
 
   // INFOS DEVIS
   devisInfo: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 20,
+    marginBottom: 0,
   },
   infoBox: {
     borderRadius: 4,
     padding: 6,
     width: '30%',
   },
-  infoLabel: { fontSize: 7, color: '#6b7280', marginBottom: 2 },
-  infoValue: { fontSize: 9, color: '#111827' },
+  infoLabel: { fontSize: 8, color: '#6b7280', marginBottom: 2, fontWeight: 'light' },
+  infoValue: { fontSize: 12, color: '#111827' },
 
   // TABLEAU
   table: {
@@ -160,27 +211,52 @@ const styles = StyleSheet.create({
   },
   tableHeader: {
     flexDirection: 'row',
-    backgroundColor: '#eff6ff',
+    backgroundColor: '#dbeafe',
     padding: 8,
   },
   tableHeaderText: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: 'bold',
-    color: '#2563eb',
+    color: '#374151',
   },
   tableRow: {
     flexDirection: 'row',
     padding: 8,
     borderBottomWidth: 0.5,
     borderBottomColor: '#e5e7eb',
+    minHeight: 32,
+    alignItems: 'center',
   },
   tableRowEven: { backgroundColor: '#f9fafb' },
-  col1: { width: '35%' },
-  col2: { width: '12%', textAlign: 'center' },
-  col3: { width: '12%', textAlign: 'center' },
-  col4: { width: '15%', textAlign: 'right' },
-  col5: { width: '10%', textAlign: 'center' },
-  col6: { width: '16%', textAlign: 'right' },
+  tableText: {
+    fontSize: 10,
+    color: '#111827',
+  },
+  
+  // Colonnes mode rapide
+  colDesignationRapide: { width: '65%', paddingRight: 8 },
+  colTVA: { width: '15%', textAlign: 'center' },
+  colMontantRapide: { width: '20%', textAlign: 'right' },
+  
+  // Colonnes mode complet
+  colDesignationComplet: { width: '35%', paddingRight: 8 },
+  colQuantite: { width: '12%', textAlign: 'center' },
+  colUnite: { width: '12%', textAlign: 'center' },
+  colPrixUnitaire: { width: '15%', textAlign: 'right' },
+  colMontantComplet: { width: '16%', textAlign: 'right' },
+  
+  // Textes dans les cellules
+  designationText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginBottom: 2,
+  },
+  descriptionText: {
+    fontSize: 9,
+    color: '#6b7280',
+    lineHeight: 1.3,
+  },
 
   // TOTAUX
   totalsSection: { alignItems: 'flex-end', marginTop: 20 },
@@ -188,20 +264,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     width: 200,
     justifyContent: 'space-between',
-    fontSize: 9,
     marginBottom: 4,
+  },
+  totalLabel: {
+    fontSize: 11,
+    color: '#4b5563',
+  },
+  totalValue: {
+    fontSize: 11,
+    color: '#111827',
+    fontWeight: 'bold',
   },
   totalRowFinal: {
     flexDirection: 'row',
     width: 200,
     justifyContent: 'space-between',
-    fontSize: 11,
-    fontWeight: 'bold',
-    color: '#2563eb',
     borderTopWidth: 1,
     borderTopColor: '#e5e7eb',
     paddingTop: 6,
     marginTop: 4,
+  },
+  totalLabelFinal: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#2563eb',
+  },
+  totalValueFinal: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#2563eb',
   },
 
   // NOTES
@@ -228,12 +319,18 @@ const styles = StyleSheet.create({
     bottom: 24,
     left: 32,
     right: 32,
-    fontSize: 8,
-    color: '#9ca3af',
-    textAlign: 'center',
     borderTopWidth: 0.5,
     borderTopColor: '#e5e7eb',
     paddingTop: 8,
+    textAlign: 'center',
+  },
+  footerText: {
+    fontSize: 8,
+    color: '#9ca3af',
+    textAlign: 'center',
+  },
+  footerTextMarginTop: {
+    marginTop: 8,
   },
 })
 
@@ -248,45 +345,92 @@ const DevisPDF: React.FC<DevisPDFProps> = ({ devis, client, company }) => {
       <Page size="A4" style={styles.page}>
         {/* HEADER */}
         <View style={styles.headerTop}>
-          {/* Entreprise */}
-          <View style={styles.logoSection}>
+          {/* Section entreprise (gauche) */}
+          <View style={styles.companySection}>
             {company.logo ? (
-              <Image style={styles.logo} src={company.logo} />
+              <Image 
+                style={styles.logo} 
+                src={`/api/proxy-image?url=${encodeURIComponent(company.logo)}`}
+              />
             ) : (
               <View style={styles.logoBox}>
-                <Text>LOGO</Text>
+                <Text style={{ fontSize: 8, color: '#9ca3af' }}>LOGO</Text>
               </View>
             )}
             {company.formeJuridique && (
-              <Text style={styles.companyDetails}>{company.formeJuridique}</Text>
+              <Text style={styles.companyType}>{company.formeJuridique}</Text>
             )}
             <Text style={styles.companyName}>{company.nom}</Text>
-            <Text style={styles.companyDetails}>{company.adresseSiege.adresse}</Text>
-            <Text style={styles.companyDetails}>
+            <Text style={styles.companyAddress}>{company.adresseSiege.adresse}</Text>
+            <Text style={styles.companyAddress}>
               {company.adresseSiege.codePostal} {company.adresseSiege.ville}
             </Text>
+             {/* Adresse de livraison conditionnelle */}
+            {devis.options.adresseLivraison && devis.adresseLivraison && (
+              <View style={{ marginBottom: 36, marginTop: 20 }}>
+                <Text style={{ fontSize: 14, fontWeight: 'bold', marginBottom: 2, color: '#111827' }}>
+                  Adresse de livraison
+                </Text>
+                <View style={{  }}>
+                  <Text style={{ fontSize: 11, color: '#4b5563', marginBottom: 2 }}>
+                    {devis.adresseLivraison.adresse}
+                  </Text>
+                  {devis.adresseLivraison.complementAdresse && (
+                    <Text style={{ fontSize: 11, color: '#4b5563', marginBottom: 2 }}>
+                      {devis.adresseLivraison.complementAdresse}
+                    </Text>
+                  )}
+                  <Text style={{ fontSize: 11, color: '#4b5563' }}>
+                    {devis.adresseLivraison.codePostal} {devis.adresseLivraison.ville}
+                  </Text>
+                </View>
+              </View>
+            )}
           </View>
 
-          {/* Client */}
+          {/* Section client (droite) */}
           <View style={styles.clientSection}>
             <View style={styles.clientBox}>
-              <Text style={styles.clientName}>
+              <Text style={styles.clientTitle}>Client</Text>
+              <Text style={styles.clientAddress}>
                 {client.typeClient === 'entreprise'
                   ? client.nomEntreprise
                   : `${client.prenom || ''} ${client.nom || ''}`}
               </Text>
-              {client.adresse && <Text style={styles.clientText}>{client.adresse}</Text>}
+              {client.adresse && <Text style={styles.clientAddress}>{client.adresse}</Text>}
               {client.complementAdresse && (
-                <Text style={styles.clientText}>{client.complementAdresse}</Text>
+                <Text style={styles.clientAddress}>{client.complementAdresse}</Text>
               )}
               {client.codePostal && client.ville && (
-                <Text style={styles.clientText}>
+                <Text style={styles.clientAddress}>
                   {client.codePostal} {client.ville}
                 </Text>
+              )}
+              {/* SIRET et TVA conditionnels */}
+              {devis.options.siretClient && client.siret && (
+                <View style={{ marginTop: 8, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'baseline' }}>
+                  <Text style={styles.clientInfoLabel}>SIRET: </Text>
+                  <Text style={styles.clientAddress}>{client.siret}</Text>
+                </View>
+              )}
+              {devis.options.tvaIntracommunautaire && client.numeroTVA && (
+                <View style={{ marginTop: 4, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'baseline' }}>
+                  <Text style={styles.clientInfoLabel}>TVA: </Text>
+                  <Text style={styles.clientAddress}>{client.numeroTVA}</Text>
+                </View>
               )}
             </View>
           </View>
         </View>
+
+        {/* Intitulé de document conditionnel */}
+        {devis.options.intituleDocument && devis.intituleDocument && (
+          <View style={{ marginBottom: 24, alignItems: 'flex-start' }}>
+            <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#111827' }}>
+              {devis.intituleDocument}
+            </Text>
+          </View>
+        )}
 
         {/* INFOS DEVIS */}
         <View style={styles.devisInfo}>
@@ -304,30 +448,67 @@ const DevisPDF: React.FC<DevisPDFProps> = ({ devis, client, company }) => {
           </View>
         </View>
 
-        {/* TABLEAU */}
+        {/* TABLEAU - Adaptatif selon le type de facturation */}
         <View style={styles.table}>
-          <View style={styles.tableHeader}>
-            <Text style={[styles.col1, styles.tableHeaderText]}>Désignation</Text>
-            <Text style={[styles.col2, styles.tableHeaderText]}>Quantité</Text>
-            <Text style={[styles.col3, styles.tableHeaderText]}>Unité</Text>
-            <Text style={[styles.col4, styles.tableHeaderText]}>Prix unitaire</Text>
-            <Text style={[styles.col5, styles.tableHeaderText]}>TVA</Text>
-            <Text style={[styles.col6, styles.tableHeaderText]}>Montant HT</Text>
-          </View>
+          {devis.options.typeFacturation === 'rapide' ? (
+            <>
+              {/* En-têtes mode rapide */}
+              <View style={styles.tableHeader}>
+                <Text style={[styles.colDesignationRapide, styles.tableHeaderText]}>Désignation</Text>
+                <Text style={[styles.colTVA, styles.tableHeaderText]}>TVA</Text>
+                <Text style={[styles.colMontantRapide, styles.tableHeaderText]}>Montant HT</Text>
+              </View>
 
-          {devis.lignes.map((ligne, index) => (
-            <View
-              key={index}
-              style={[styles.tableRow, ...(index % 2 === 1 ? [styles.tableRowEven] : [])]}
-            >
-              <Text style={styles.col1}>{ligne.designation}</Text>
-              <Text style={styles.col2}>{ligne.quantite}</Text>
-              <Text style={styles.col3}>{ligne.unite}</Text>
-              <Text style={styles.col4}>{formatPrice(ligne.prixUnitaireHT)}</Text>
-              <Text style={styles.col5}>{ligne.tauxTVA}%</Text>
-              <Text style={styles.col6}>{formatPrice(ligne.montantHT)}</Text>
-            </View>
-          ))}
+              {/* Lignes mode rapide */}
+              {devis.lignes.map((ligne, index) => (
+                <View
+                  key={index}
+                  style={[styles.tableRow, ...(index % 2 === 1 ? [styles.tableRowEven] : [])]}
+                >
+                  <View style={styles.colDesignationRapide}>
+                    <Text style={styles.designationText}>{ligne.designation}</Text>
+                    {ligne.description && (
+                      <Text style={styles.descriptionText}>{ligne.description}</Text>
+                    )}
+                  </View>
+                  <Text style={[styles.colTVA, styles.tableText]}>{ligne.tauxTVA}%</Text>
+                  <Text style={[styles.colMontantRapide, styles.tableText]}>{formatPrice(ligne.montantHT)}</Text>
+                </View>
+              ))}
+            </>
+          ) : (
+            <>
+              {/* En-têtes mode complet */}
+              <View style={styles.tableHeader}>
+                <Text style={[styles.colDesignationComplet, styles.tableHeaderText]}>Désignation</Text>
+                <Text style={[styles.colQuantite, styles.tableHeaderText]}>Quantité</Text>
+                <Text style={[styles.colUnite, styles.tableHeaderText]}>Unité</Text>
+                <Text style={[styles.colPrixUnitaire, styles.tableHeaderText]}>Prix unitaire</Text>
+                <Text style={[styles.colTVA, styles.tableHeaderText]}>TVA</Text>
+                <Text style={[styles.colMontantComplet, styles.tableHeaderText]}>Montant HT</Text>
+              </View>
+
+              {/* Lignes mode complet */}
+              {devis.lignes.map((ligne, index) => (
+                <View
+                  key={index}
+                  style={[styles.tableRow, ...(index % 2 === 1 ? [styles.tableRowEven] : [])]}
+                >
+                  <View style={styles.colDesignationComplet}>
+                    <Text style={styles.designationText}>{ligne.designation}</Text>
+                    {ligne.description && (
+                      <Text style={styles.descriptionText}>{ligne.description}</Text>
+                    )}
+                  </View>
+                  <Text style={[styles.colQuantite, styles.tableText]}>{ligne.quantite}</Text>
+                  <Text style={[styles.colUnite, styles.tableText]}>{ligne.unite}</Text>
+                  <Text style={[styles.colPrixUnitaire, styles.tableText]}>{formatPrice(ligne.prixUnitaireHT)}</Text>
+                  <Text style={[styles.colTVA, styles.tableText]}>{ligne.tauxTVA}%</Text>
+                  <Text style={[styles.colMontantComplet, styles.tableText]}>{formatPrice(ligne.montantHT)}</Text>
+                </View>
+              ))}
+            </>
+          )}
         </View>
 
         {/* TOTAUX */}
@@ -335,31 +516,35 @@ const DevisPDF: React.FC<DevisPDFProps> = ({ devis, client, company }) => {
           {devis.options.remiseGlobale && devis.sousTotal && devis.remiseHT ? (
             <>
               <View style={styles.totalRow}>
-                <Text>Sous-total HT</Text>
-                <Text>{formatPrice(devis.sousTotal)}</Text>
+                <Text style={styles.totalLabel}>Sous-total HT</Text>
+                <Text style={styles.totalValue}>{formatPrice(devis.sousTotal)}</Text>
               </View>
               <View style={styles.totalRow}>
-                <Text>Remise HT</Text>
-                <Text>-{formatPrice(devis.remiseHT)}</Text>
+                <Text style={styles.totalLabel}>Remise HT</Text>
+                <Text style={styles.totalValue}>-{formatPrice(devis.remiseHT)}</Text>
               </View>
               <View style={styles.totalRow}>
-                <Text>Total HT</Text>
-                <Text>{formatPrice(devis.montantTotalHT)}</Text>
+                <Text style={styles.totalLabel}>Total HT</Text>
+                <Text style={styles.totalValue}>{formatPrice(devis.montantTotalHT)}</Text>
               </View>
             </>
           ) : (
             <View style={styles.totalRow}>
-              <Text>Total HT</Text>
-              <Text>{formatPrice(devis.montantTotalHT)}</Text>
+              <Text style={styles.totalLabel}>Total HT</Text>
+              <Text style={styles.totalValue}>{formatPrice(devis.montantTotalHT)}</Text>
             </View>
           )}
-          <View style={styles.totalRow}>
-            <Text>TVA</Text>
-            <Text>{formatPrice(devis.montantTotalTVA)}</Text>
-          </View>
+          {devis.montantTotalTVA > 0 && (
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>TVA</Text>
+              <Text style={styles.totalValue}>{formatPrice(devis.montantTotalTVA)}</Text>
+            </View>
+          )}
           <View style={styles.totalRowFinal}>
-            <Text>Total TTC</Text>
-            <Text>{formatPrice(devis.montantTotalTTC)}</Text>
+            <Text style={styles.totalLabelFinal}>
+              {devis.montantTotalTVA > 0 ? 'Total TTC' : 'Total'}
+            </Text>
+            <Text style={styles.totalValueFinal}>{formatPrice(devis.montantTotalTTC)}</Text>
           </View>
         </View>
 
@@ -381,18 +566,13 @@ const DevisPDF: React.FC<DevisPDFProps> = ({ devis, client, company }) => {
           </View>
         )}
 
-        {/* CONDITIONS D'ACCEPTATION */}
-
         {/* FOOTER */}
         <View style={styles.footer}>
-          {devis.options.conditionsAcceptation && (
-            <Text style={styles.conditionsText}>
+          <Text style={[styles.footerText, styles.footerTextMarginTop]}>
               {devis.conditionsAcceptation || 'Pour être accepté, le devis doit être daté, signé et suivi de la mention manuscrite « Bon pour accord ».'}
             </Text>
-          )}
-          <Text>
-            SIREN {company.siret} - NAF {company.codeAPE} - TVA intracommunautaire :{' '}
-            {company.numeroTVA}
+          <Text style={[styles.footerText, styles.footerTextMarginTop]}>
+            {devis.customCompanyInfo}
           </Text>
         </View>
       </Page>
