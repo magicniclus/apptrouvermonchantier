@@ -197,13 +197,28 @@ export function useDevis() {
       const mainClientDoc = clientsSnapshot.docs[0]
       const mainClientId = mainClientDoc.id
 
+      // Préparer les données de mise à jour en mappant statut vers status
+      const updateData: any = { ...updates }
+      if (updates.statut) {
+        updateData.status = updates.statut
+        delete updateData.statut
+      }
+      updateData.dateModification = new Date()
+
       const devisRef = doc(db, `clients/${mainClientId}/devis`, devisId)
-      await updateDoc(devisRef, {
-        ...updates,
-        dateModification: new Date()
-      })
+      await updateDoc(devisRef, updateData)
       
-      await loadDevis() // Recharger la liste
+      // Mettre à jour le state local immédiatement pour une meilleure UX
+      setDevis(prevDevis => 
+        prevDevis.map(devis => 
+          devis.id === devisId 
+            ? { ...devis, ...updates }
+            : devis
+        )
+      )
+      
+      // Recharger la liste pour s'assurer de la cohérence
+      await loadDevis()
     } catch (error) {
       console.error('Erreur lors de la mise à jour du devis:', error)
       throw error
