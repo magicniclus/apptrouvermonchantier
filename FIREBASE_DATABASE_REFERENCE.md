@@ -145,6 +145,10 @@ clients/
                 │   pourcentage: number
                 │   montant: number
                 │ }
+                ├── conditionsAcceptation: string (conditions d'acceptation du devis)
+                ├── champLibre: string (champ libre personnalisable)
+                ├── motifExonerationTVA: string ("aucun" | "non_soumis" | "france_sans_tva" | "hors_france")
+                ├── customCompanyInfo: string (informations entreprise personnalisées)
                 ├── uidclient: string (UID du propriétaire)
                 ├── mainClientId: string (ID du client principal)
                 └── lastModified: Timestamp
