@@ -13,10 +13,17 @@ interface DevisData {
   montantTotalTTC: number
   conditions?: string
   notes?: string
+  conditionsAcceptation?: string
+  champLibre?: string
+  motifExonerationTVA?: string
   options: {
+    typeFacturation: 'rapide' | 'complet'
     adresseLivraison: boolean
     conditionsAcceptation: boolean
     remiseGlobale: boolean
+    siretClient: boolean
+    tvaIntracommunautaire: boolean
+    intituleDocument: boolean
   }
   adresseLivraison?: {
     adresse: string
@@ -35,11 +42,14 @@ interface DevisData {
 
 interface LigneDevis {
   designation: string
+  description?: string
   quantite: number
   unite: string
   prixUnitaireHT: number
   tauxTVA: number
   montantHT: number
+  remise: number
+  isDesignationOnly?: boolean
 }
 
 interface ClientData {
