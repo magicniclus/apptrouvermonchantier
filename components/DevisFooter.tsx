@@ -6,6 +6,8 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc, collection, query, where, getDocs, serverTimestamp } from 'firebase/firestore'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Label } from '@/components/ui/label'
 import { Edit3, Save, X } from 'lucide-react'
 
 interface CompanyInfo {
@@ -29,18 +31,22 @@ interface DevisFooterProps {
   showConditions?: boolean
   showCompanyInfo?: boolean
   showFreeField?: boolean
+  showVATJustification?: boolean
+  allTVAZero?: boolean
   customConditionsText?: string
   devisId?: string
   devisConditionsAcceptation?: string
   devisCustomCompanyInfo?: string
   devisFreeFieldContent?: string
+  devisMotifExonerationTVA?: string
   onConditionsChange?: (newConditions: string) => void
   onCompanyInfoChange?: (newCompanyInfo: string) => void
   onFreeFieldChange?: (newFreeField: string) => void
+  onVATJustificationChange?: (newMotif: string) => void
   onGetLocalStates?: React.MutableRefObject<(() => { localConditionsAcceptation: string; localCustomCompanyInfo: string }) | null>
 }
 
-export default function DevisFooter({ className = '', showConditions = true, showCompanyInfo = true, showFreeField = false, customConditionsText, devisId, devisConditionsAcceptation, devisCustomCompanyInfo, devisFreeFieldContent, onConditionsChange, onCompanyInfoChange, onFreeFieldChange, onGetLocalStates }: DevisFooterProps) {
+export default function DevisFooter({ className = '', showConditions = true, showCompanyInfo = true, showFreeField = false, showVATJustification = false, allTVAZero = false, customConditionsText, devisId, devisConditionsAcceptation, devisCustomCompanyInfo, devisFreeFieldContent, devisMotifExonerationTVA, onConditionsChange, onCompanyInfoChange, onFreeFieldChange, onVATJustificationChange, onGetLocalStates }: DevisFooterProps) {
   const { user } = useAuth()
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>({})
   const [isEditing, setIsEditing] = useState(false)
@@ -57,6 +63,8 @@ export default function DevisFooter({ className = '', showConditions = true, sho
   const [localCustomCompanyInfo, setLocalCustomCompanyInfo] = useState('')
   // État local pour le champ libre modifié dans un devis (sans jamais sauvegarder dans le client racine)
   const [localFreeFieldContent, setLocalFreeFieldContent] = useState('')
+  // État local pour le motif d'exonération de TVA
+  const [localMotifExonerationTVA, setLocalMotifExonerationTVA] = useState('aucun')
 
   useEffect(() => {
     if (user?.uid) {
@@ -74,13 +82,20 @@ export default function DevisFooter({ className = '', showConditions = true, sho
     }
   }, [localConditionsAcceptation, localCustomCompanyInfo, onGetLocalStates])
 
-  // Mettre à jour le champ libre quand les données du devis changent
+  // Initialiser le contenu du champ libre depuis les props du devis seulement
   useEffect(() => {
-    if (devisId && devisFreeFieldContent !== undefined) {
-      console.log('🔄 DevisFooter: Updating localFreeFieldContent with:', devisFreeFieldContent)
+    console.log('🔄 DevisFooter - Initialisation du champ libre depuis devis:', devisFreeFieldContent)
+    if (devisFreeFieldContent !== undefined) {
       setLocalFreeFieldContent(devisFreeFieldContent)
     }
-  }, [devisFreeFieldContent, devisId])
+  }, [devisFreeFieldContent])
+
+  // Initialiser le motif d'exonération de TVA depuis les props du devis
+  useEffect(() => {
+    if (devisMotifExonerationTVA !== undefined) {
+      setLocalMotifExonerationTVA(devisMotifExonerationTVA)
+    }
+  }, [devisMotifExonerationTVA, devisId])
 
   const loadCompanyInfo = async () => {
     try {
@@ -500,6 +515,7 @@ export default function DevisFooter({ className = '', showConditions = true, sho
             </div>
           ) : (
             <div className="space-y-4">
+              
               {showConditions && (
                 <div className="text-center">
                   <p className="text-xs text-gray-500 leading-relaxed">
@@ -643,6 +659,7 @@ export default function DevisFooter({ className = '', showConditions = true, sho
           )}
         </div>
 
+
         {/* Character count for editing */}
         {isEditing && (
           <div className="text-right mt-2">
@@ -654,4 +671,20 @@ export default function DevisFooter({ className = '', showConditions = true, sho
       </div>
     </div>
   )
+}
+
+// Fonction pour obtenir le texte d'exonération de TVA
+const getMotifExonerationText = (motif: string) => {
+  switch (motif) {
+    case 'aucun':
+      return 'Aucun motif d\'exonération de TVA'
+    case 'non_soumis':
+      return 'TVA non applicable, art. 293 B du CGI'
+    case 'france_sans_tva':
+      return 'TVA non applicable'
+    case 'hors_france':
+      return 'Autoliquidation'
+    default:
+      return 'Aucun motif d\'exonération de TVA'
+  }
 }
