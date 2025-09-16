@@ -58,8 +58,12 @@ export default function NouveauDevisPage() {
     notes: '',
     validiteTexte: '60 jours', // Texte personnalisable pour la validité
     conditionsAcceptation: 'Pour être accepté, le devis doit être daté, signé et suivi de la mention manuscrite « Bon pour accord ».',
-    champLibre: ''
+    champLibre: '',
+    motifExonerationTVA: 'aucun'
   })
+
+  // État pour la justification d'absence de TVA
+  const [motifExonerationTVA, setMotifExonerationTVA] = useState('aucun')
   
   // État pour le numéro de devis généré
   const [numeroDevis, setNumeroDevis] = useState<string>('')
@@ -174,10 +178,26 @@ export default function NouveauDevisPage() {
     return { sousTotal, remiseHT, totalHT, totalTVA, totalTTC }
   }
 
+  // Fonction pour obtenir le texte d'exonération de TVA
+  const getMotifExonerationText = (motif: string) => {
+    switch (motif) {
+      case 'aucun':
+        return 'Aucun motif d\'exonération de TVA'
+      case 'non_soumis':
+        return 'TVA non applicable, art. 293 B du CGI'
+      case 'france_sans_tva':
+        return 'TVA non applicable'
+      case 'hors_france':
+        return 'Autoliquidation'
+      default:
+        return 'Aucun motif d\'exonération de TVA'
+    }
+  }
+
   const { sousTotal, remiseHT, totalHT, totalTVA, totalTTC } = calculateTotals()
   
-  // Vérifier si toutes les TVA sont à 0%
-  const allTVAZero = lignes.every(ligne => ligne.tauxTVA === 0)
+  // Vérifier si au moins une TVA est à 0%
+  const anyTVAZero = lignes.some(ligne => ligne.tauxTVA === 0)
 
   // Update line amount when quantity, price or discount changes
   const updateLigne = (id: string, field: keyof DevisLine, value: any) => {
@@ -271,6 +291,17 @@ export default function NouveauDevisPage() {
 
   // Créer un brouillon initial (sans numéro de devis)
   const creerBrouillon = async () => {
+    // Valider les données avant création
+    const validation = validerDonnees()
+    if (!validation.valide) {
+      toast.error(validation.message, {
+        style: {
+          color: '#dc2626',
+          fontWeight: 'bold'
+        }
+      })
+      return
+    }
     console.log('=== DÉBUT CRÉATION BROUILLON ===')
     console.log('clientData:', clientData)
     console.log('user:', user)
@@ -336,6 +367,7 @@ export default function NouveauDevisPage() {
         notes: devisData.notes || '',
         conditionsAcceptation: localStates.localConditionsAcceptation || devisData.conditionsAcceptation || 'Pour être accepté, le devis doit être daté, signé et suivi de la mention manuscrite « Bon pour accord ».',
         champLibre: devisData.champLibre || '',
+        motifExonerationTVA: motifExonerationTVA || 'aucun',
         customCompanyInfo: localStates.localCustomCompanyInfo || '',
         options: options,
         adresseLivraison: options.adresseLivraison ? adresseLivraison : null,
@@ -372,10 +404,68 @@ export default function NouveauDevisPage() {
     console.log('=== FIN CRÉATION BROUILLON ===')
   }
 
+  // Validation des données avant sauvegarde
+  const validerDonnees = () => {
+    // Vérifier qu'un client est sélectionné
+    if (!selectedClient) {
+      return {
+        valide: false,
+        message: "Vous devez sélectionner un client pour enregistrer le devis."
+      }
+    }
+    
+    // Filtrer les lignes non-designation pour la validation
+    const lignesNonDesignation = lignes.filter(ligne => !ligne.isDesignationOnly)
+    
+    // Vérifier qu'il y a au moins une prestation/produit
+    if (lignesNonDesignation.length === 0) {
+      return {
+        valide: false,
+        message: "Aucune prestation ou produit n'a été ajouté. Veuillez ajouter au moins un élément à votre devis."
+      }
+    }
+    
+    // Vérifier que toutes les lignes non-designation ont les champs obligatoires remplis
+    for (const ligne of lignesNonDesignation) {
+      if (!ligne.designation.trim()) {
+        return {
+          valide: false,
+          message: "Une ou plusieurs lignes sont incomplètes. Veuillez remplir la désignation de toutes les prestations et produits."
+        }
+      }
+      if (ligne.quantite <= 0) {
+        return {
+          valide: false,
+          message: "Une ou plusieurs lignes sont incomplètes. La quantité doit être supérieure à 0 pour toutes les prestations et produits."
+        }
+      }
+      if (ligne.prixUnitaireHT < 0) {
+        return {
+          valide: false,
+          message: "Une ou plusieurs lignes sont incomplètes. Le prix unitaire ne peut pas être négatif."
+        }
+      }
+    }
+    
+    return { valide: true, message: "" }
+  }
+
   // Sauvegarder manuellement le brouillon
   const sauvegarderBrouillon = async () => {
     if (!user?.uid) {
       toast.error('Utilisateur non connecté')
+      return
+    }
+
+    // Valider les données avant sauvegarde
+    const validation = validerDonnees()
+    if (!validation.valide) {
+      toast.error(validation.message, {
+        style: {
+          color: '#dc2626',
+          fontWeight: 'bold'
+        }
+      })
       return
     }
 
@@ -1365,18 +1455,18 @@ export default function NouveauDevisPage() {
                     <span className="text-gray-600">Remise HT</span>
                     <span className="font-medium">-{remiseHT.toFixed(2)} €</span>
                   </div>
-                  <div className={`flex justify-between ${allTVAZero ? 'text-lg font-bold text-blue-600' : 'text-xs'}`}>
-                    <span className={allTVAZero ? '' : 'text-gray-600'}>Total HT</span>
-                    <span className={allTVAZero ? '' : 'font-medium'}>{totalHT.toFixed(2)} €</span>
+                  <div className={`flex justify-between ${anyTVAZero ? 'text-lg font-bold text-blue-600' : 'text-xs'}`}>
+                    <span className={anyTVAZero ? '' : 'text-gray-600'}>Total HT</span>
+                    <span className={anyTVAZero ? '' : 'font-medium'}>{totalHT.toFixed(2)} €</span>
                   </div>
                 </>
               ) : (
-                <div className={`flex justify-between ${allTVAZero ? 'text-lg font-bold text-blue-600' : 'text-xs'}`}>
-                  <span className={allTVAZero ? '' : 'text-gray-600'}>Total HT</span>
-                  <span className={allTVAZero ? '' : 'font-medium'}>{totalHT.toFixed(2)} €</span>
+                <div className={`flex justify-between ${anyTVAZero ? 'text-lg font-bold text-blue-600' : 'text-xs'}`}>
+                  <span className={anyTVAZero ? '' : 'text-gray-600'}>Total HT</span>
+                  <span className={anyTVAZero ? '' : 'font-medium'}>{totalHT.toFixed(2)} €</span>
                 </div>
               )}
-              {!allTVAZero && (
+              {!anyTVAZero && (
                 <>
                   <div className="flex justify-between text-xs">
                     <span className="text-gray-600">TVA</span>
@@ -1395,6 +1485,29 @@ export default function NouveauDevisPage() {
             {/* Spacer to push footer to bottom */}
             <div className="flex-grow"></div>
             
+            {/* Justification d'absence de TVA si au moins une TVA est à 0% */}
+            {anyTVAZero && (
+              <div className="border-t border-gray-200 pt-4 space-y-3">
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium text-gray-700">Motif d'exonération de TVA</Label>
+                  <Select value={motifExonerationTVA} onValueChange={setMotifExonerationTVA}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Sélectionner un motif" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="aucun">Aucun motif</SelectItem>
+                      <SelectItem value="non_soumis">Je ne suis pas soumis à la TVA</SelectItem>
+                      <SelectItem value="france_sans_tva">Prestation France sans TVA</SelectItem>
+                      <SelectItem value="hors_france">Prestation Hors France</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
+                  {getMotifExonerationText(motifExonerationTVA)}
+                </div>
+              </div>
+            )}
+
             {/* Footer with legal text and company info */}
             <DevisFooter 
               showConditions={options.conditionsAcceptation}
