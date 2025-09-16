@@ -33,12 +33,14 @@ interface DevisFooterProps {
   devisId?: string
   devisConditionsAcceptation?: string
   devisCustomCompanyInfo?: string
+  devisFreeFieldContent?: string
   onConditionsChange?: (newConditions: string) => void
   onCompanyInfoChange?: (newCompanyInfo: string) => void
+  onFreeFieldChange?: (newFreeField: string) => void
   onGetLocalStates?: React.MutableRefObject<(() => { localConditionsAcceptation: string; localCustomCompanyInfo: string }) | null>
 }
 
-export default function DevisFooter({ className = '', showConditions = true, showCompanyInfo = true, showFreeField = false, customConditionsText, devisId, devisConditionsAcceptation, devisCustomCompanyInfo, onConditionsChange, onCompanyInfoChange, onGetLocalStates }: DevisFooterProps) {
+export default function DevisFooter({ className = '', showConditions = true, showCompanyInfo = true, showFreeField = false, customConditionsText, devisId, devisConditionsAcceptation, devisCustomCompanyInfo, devisFreeFieldContent, onConditionsChange, onCompanyInfoChange, onFreeFieldChange, onGetLocalStates }: DevisFooterProps) {
   const { user } = useAuth()
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>({})
   const [isEditing, setIsEditing] = useState(false)
@@ -53,6 +55,8 @@ export default function DevisFooter({ className = '', showConditions = true, sho
   const [localConditionsAcceptation, setLocalConditionsAcceptation] = useState('')
   // État local pour les informations d'entreprise modifiées dans un devis (sans jamais sauvegarder dans customCompanyInfo)
   const [localCustomCompanyInfo, setLocalCustomCompanyInfo] = useState('')
+  // État local pour le champ libre modifié dans un devis (sans jamais sauvegarder dans le client racine)
+  const [localFreeFieldContent, setLocalFreeFieldContent] = useState('')
 
   useEffect(() => {
     if (user?.uid) {
@@ -69,6 +73,14 @@ export default function DevisFooter({ className = '', showConditions = true, sho
       })
     }
   }, [localConditionsAcceptation, localCustomCompanyInfo, onGetLocalStates])
+
+  // Mettre à jour le champ libre quand les données du devis changent
+  useEffect(() => {
+    if (devisId && devisFreeFieldContent !== undefined) {
+      console.log('🔄 DevisFooter: Updating localFreeFieldContent with:', devisFreeFieldContent)
+      setLocalFreeFieldContent(devisFreeFieldContent)
+    }
+  }, [devisFreeFieldContent, devisId])
 
   const loadCompanyInfo = async () => {
     try {
@@ -120,10 +132,16 @@ export default function DevisFooter({ className = '', showConditions = true, sho
           // Vérifier si le devis a des informations d'entreprise personnalisées
           // Utiliser les infos du devis si elles existent, sinon les infos par défaut de la racine
           setLocalCustomCompanyInfo(devisCustomCompanyInfo || defaultCompanyInfo.join(' - '))
+          
+          // Initialiser le champ libre UNIQUEMENT avec les données du devis (pas de fallback client racine)
+          setLocalFreeFieldContent(devisFreeFieldContent || '')
         } else {
           // Mode paramètres : initialiser avec le contenu du client racine
           const initialContent = clientInfo.customFooterContent === 'Pour être accepté, le devis doit être daté, signé et suivi de la mention manuscrite « Bon pour accord ».' ? '' : (clientInfo.customFooterContent || '')
           setCustomContent(initialContent)
+          
+          // Mode paramètres : initialiser le champ libre avec le contenu du client racine
+          setFreeFieldContent(clientInfo.freeFieldContent || '')
         }
         
         // Build default company info from database values
@@ -301,8 +319,12 @@ export default function DevisFooter({ className = '', showConditions = true, sho
       setSaving(true)
       
       if (devisId) {
-        // Mode devis : JAMAIS sauvegarder dans Firebase
+        // Mode devis : JAMAIS sauvegarder dans Firebase, mais notifier le parent
         console.log('🚫 MODE DEVIS: Aucune sauvegarde freeFieldContent dans Firebase')
+        console.log('✅ Champ libre mis à jour dans le devis:', devisId)
+        if (onFreeFieldChange) {
+          onFreeFieldChange(localFreeFieldContent)
+        }
         setIsEditingFreeField(false)
         return // SORTIR IMMÉDIATEMENT
       }
@@ -360,7 +382,13 @@ export default function DevisFooter({ className = '', showConditions = true, sho
   }
 
   const handleCancelFreeField = () => {
-    setFreeFieldContent(companyInfo.freeFieldContent || '')
+    if (devisId) {
+      // Mode devis : remettre le contenu local à sa valeur initiale
+      setLocalFreeFieldContent(devisFreeFieldContent || '')
+    } else {
+      // Mode paramètres : remettre le contenu du client racine
+      setFreeFieldContent(companyInfo.freeFieldContent || '')
+    }
     setIsEditingFreeField(false)
   }
 
@@ -466,7 +494,7 @@ export default function DevisFooter({ className = '', showConditions = true, sho
                   Texte par défaut
                 </Button>
               </div>
-              <div className="text-xs text-gray-400 italic">
+              <div className="text-xs text-gray-500 italic">
                 "{defaultLegalText}"
               </div>
             </div>
@@ -474,7 +502,7 @@ export default function DevisFooter({ className = '', showConditions = true, sho
             <div className="space-y-4">
               {showConditions && (
                 <div className="text-center">
-                  <p className="text-xs text-gray-600 leading-relaxed">
+                  <p className="text-xs text-gray-500 leading-relaxed">
                     {displayContent}
                   </p>
                 </div>
@@ -520,8 +548,8 @@ export default function DevisFooter({ className = '', showConditions = true, sho
                     {isEditingFreeField ? (
                       <div className="space-y-2">
                         <Textarea
-                          value={freeFieldContent}
-                          onChange={(e) => setFreeFieldContent(e.target.value)}
+                          value={devisId ? localFreeFieldContent : freeFieldContent}
+                          onChange={(e) => devisId ? setLocalFreeFieldContent(e.target.value) : setFreeFieldContent(e.target.value)}
                           placeholder="Champ libre"
                           className="min-h-[60px] text-xs resize-none text-center"
                           disabled={saving}
@@ -532,12 +560,12 @@ export default function DevisFooter({ className = '', showConditions = true, sho
                       </div>
                     ) : (
                       <div className="text-center">
-                        {freeFieldContent ? (
-                          <p className="text-xs text-gray-600 leading-relaxed">
-                            {freeFieldContent}
+                        {(devisId ? localFreeFieldContent : freeFieldContent) ? (
+                          <p className="text-xs text-gray-500 leading-relaxed">
+                            {devisId ? localFreeFieldContent : freeFieldContent}
                           </p>
                         ) : (
-                          <p className="text-xs text-gray-400 italic leading-relaxed">
+                          <p className="text-xs text-gray-500 italic leading-relaxed">
                             Cliquez sur l'icône d'édition pour ajouter du contenu au champ libre
                           </p>
                         )}
@@ -618,7 +646,7 @@ export default function DevisFooter({ className = '', showConditions = true, sho
         {/* Character count for editing */}
         {isEditing && (
           <div className="text-right mt-2">
-            <span className="text-xs text-gray-400">
+            <span className="text-xs text-gray-500">
               {customContent.length} caractères
             </span>
           </div>
