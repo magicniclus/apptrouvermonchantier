@@ -15,6 +15,8 @@ interface DevisData {
   notes?: string
   conditionsAcceptation?: string
   intituleDocument?: string
+  champLibre?: string
+  motifExonerationTVA?: string
   options: {
     typeFacturation: 'rapide' | 'complet'
     adresseLivraison: boolean
@@ -47,7 +49,8 @@ interface LigneDevis {
   prixUnitaireHT: number
   tauxTVA: number
   montantHT: number
-  remise?: number
+  remise: number
+  isDesignationOnly?: boolean
 }
 
 interface ClientData {
@@ -461,19 +464,33 @@ const DevisPDF: React.FC<DevisPDFProps> = ({ devis, client, company }) => {
 
               {/* Lignes mode rapide */}
               {devis.lignes.map((ligne, index) => (
-                <View
-                  key={index}
-                  style={[styles.tableRow, ...(index % 2 === 1 ? [styles.tableRowEven] : [])]}
-                >
-                  <View style={styles.colDesignationRapide}>
-                    <Text style={styles.designationText}>{ligne.designation}</Text>
-                    {ligne.description && (
-                      <Text style={styles.descriptionText}>{ligne.description}</Text>
-                    )}
+                ligne.isDesignationOnly ? (
+                  <View
+                    key={index}
+                    style={[styles.tableRow, { backgroundColor: '#f9fafb' }]}
+                  >
+                    <View style={{ width: '100%', paddingRight: 8 }}>
+                      <Text style={styles.designationText}>{ligne.designation}</Text>
+                      {ligne.description && (
+                        <Text style={styles.descriptionText}>{ligne.description}</Text>
+                      )}
+                    </View>
                   </View>
-                  <Text style={[styles.colTVA, styles.tableText]}>{ligne.tauxTVA}%</Text>
-                  <Text style={[styles.colMontantRapide, styles.tableText]}>{formatPrice(ligne.montantHT)}</Text>
-                </View>
+                ) : (
+                  <View
+                    key={index}
+                    style={[styles.tableRow, ...(index % 2 === 1 ? [styles.tableRowEven] : [])]}
+                  >
+                    <View style={styles.colDesignationRapide}>
+                      <Text style={styles.designationText}>{ligne.designation}</Text>
+                      {ligne.description && (
+                        <Text style={styles.descriptionText}>{ligne.description}</Text>
+                      )}
+                    </View>
+                    <Text style={[styles.colTVA, styles.tableText]}>{ligne.tauxTVA}%</Text>
+                    <Text style={[styles.colMontantRapide, styles.tableText]}>{formatPrice(ligne.montantHT)}</Text>
+                  </View>
+                )
               ))}
             </>
           ) : (
@@ -490,22 +507,36 @@ const DevisPDF: React.FC<DevisPDFProps> = ({ devis, client, company }) => {
 
               {/* Lignes mode complet */}
               {devis.lignes.map((ligne, index) => (
-                <View
-                  key={index}
-                  style={[styles.tableRow, ...(index % 2 === 1 ? [styles.tableRowEven] : [])]}
-                >
-                  <View style={styles.colDesignationComplet}>
-                    <Text style={styles.designationText}>{ligne.designation}</Text>
-                    {ligne.description && (
-                      <Text style={styles.descriptionText}>{ligne.description}</Text>
-                    )}
+                ligne.isDesignationOnly ? (
+                  <View
+                    key={index}
+                    style={[styles.tableRow, { backgroundColor: '#f9fafb' }]}
+                  >
+                    <View style={{ width: '100%', paddingRight: 8 }}>
+                      <Text style={styles.designationText}>{ligne.designation}</Text>
+                      {ligne.description && (
+                        <Text style={styles.descriptionText}>{ligne.description}</Text>
+                      )}
+                    </View>
                   </View>
-                  <Text style={[styles.colQuantite, styles.tableText]}>{ligne.quantite}</Text>
-                  <Text style={[styles.colUnite, styles.tableText]}>{ligne.unite}</Text>
-                  <Text style={[styles.colPrixUnitaire, styles.tableText]}>{formatPrice(ligne.prixUnitaireHT)}</Text>
-                  <Text style={[styles.colTVA, styles.tableText]}>{ligne.tauxTVA}%</Text>
-                  <Text style={[styles.colMontantComplet, styles.tableText]}>{formatPrice(ligne.montantHT)}</Text>
-                </View>
+                ) : (
+                  <View
+                    key={index}
+                    style={[styles.tableRow, ...(index % 2 === 1 ? [styles.tableRowEven] : [])]}
+                  >
+                    <View style={styles.colDesignationComplet}>
+                      <Text style={styles.designationText}>{ligne.designation}</Text>
+                      {ligne.description && (
+                        <Text style={styles.descriptionText}>{ligne.description}</Text>
+                      )}
+                    </View>
+                    <Text style={[styles.colQuantite, styles.tableText]}>{ligne.quantite}</Text>
+                    <Text style={[styles.colUnite, styles.tableText]}>{ligne.unite}</Text>
+                    <Text style={[styles.colPrixUnitaire, styles.tableText]}>{formatPrice(ligne.prixUnitaireHT)}</Text>
+                    <Text style={[styles.colTVA, styles.tableText]}>{ligne.tauxTVA}%</Text>
+                    <Text style={[styles.colMontantComplet, styles.tableText]}>{formatPrice(ligne.montantHT)}</Text>
+                  </View>
+                )
               ))}
             </>
           )}
@@ -513,15 +544,15 @@ const DevisPDF: React.FC<DevisPDFProps> = ({ devis, client, company }) => {
 
         {/* TOTAUX */}
         <View style={styles.totalsSection}>
-          {devis.options.remiseGlobale && devis.sousTotal && devis.remiseHT ? (
+          {devis.options.remiseGlobale && devis.remiseGlobale && devis.remiseGlobale.montant > 0 ? (
             <>
               <View style={styles.totalRow}>
                 <Text style={styles.totalLabel}>Sous-total HT</Text>
-                <Text style={styles.totalValue}>{formatPrice(devis.sousTotal)}</Text>
+                <Text style={styles.totalValue}>{formatPrice(devis.sousTotal || 0)}</Text>
               </View>
               <View style={styles.totalRow}>
                 <Text style={styles.totalLabel}>Remise HT</Text>
-                <Text style={styles.totalValue}>-{formatPrice(devis.remiseHT)}</Text>
+                <Text style={styles.totalValue}>-{formatPrice(devis.remiseGlobale?.montant || 0)}</Text>
               </View>
               <View style={styles.totalRow}>
                 <Text style={styles.totalLabel}>Total HT</Text>
@@ -568,9 +599,19 @@ const DevisPDF: React.FC<DevisPDFProps> = ({ devis, client, company }) => {
 
         {/* FOOTER */}
         <View style={styles.footer}>
+          {devis.motifExonerationTVA && devis.motifExonerationTVA !== 'aucun' && (
+            <Text style={[styles.footerText, styles.footerTextMarginTop]}>
+              {getMotifExonerationText(devis.motifExonerationTVA)}
+            </Text>
+          )}
           <Text style={[styles.footerText, styles.footerTextMarginTop]}>
               {devis.conditionsAcceptation || 'Pour être accepté, le devis doit être daté, signé et suivi de la mention manuscrite « Bon pour accord ».'}
             </Text>
+          {devis.champLibre && (
+            <Text style={[styles.footerText, styles.footerTextMarginTop]}>
+              {devis.champLibre}
+            </Text>
+          )}
           <Text style={[styles.footerText, styles.footerTextMarginTop]}>
             {devis.customCompanyInfo}
           </Text>
@@ -578,6 +619,22 @@ const DevisPDF: React.FC<DevisPDFProps> = ({ devis, client, company }) => {
       </Page>
     </Document>
   )
+}
+
+// Fonction pour obtenir le texte d'exonération de TVA
+const getMotifExonerationText = (motif: string) => {
+  switch (motif) {
+    case 'aucun':
+      return 'Aucun motif d\'exonération de TVA'
+    case 'non_soumis':
+      return 'TVA non applicable, art. 293 B du CGI'
+    case 'france_sans_tva':
+      return 'TVA non applicable'
+    case 'hors_france':
+      return 'Autoliquidation'
+    default:
+      return 'Aucun motif d\'exonération de TVA'
+  }
 }
 
 export default DevisPDF
