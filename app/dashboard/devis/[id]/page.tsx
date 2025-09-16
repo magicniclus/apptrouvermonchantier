@@ -26,6 +26,7 @@ import { PulseLoader } from '@/components/ui/loader'
 interface DevisLine {
   id: string
   designation: string
+  description?: string
   quantite: number
   unite?: string
   prixUnitaireHT: number
@@ -62,7 +63,9 @@ export default function DevisDetailPage() {
     validiteDuree: 60,
     conditions: '',
     notes: '',
-    validiteTexte: '60 jours' // Texte personnalisable pour la validité
+    validiteTexte: '60 jours', // Texte personnalisable pour la validité
+    conditionsAcceptation: '',
+    champLibre: ''
   })
   
   // État pour le numéro de devis généré
@@ -113,7 +116,9 @@ export default function DevisDetailPage() {
             validiteDuree: devisDataFromDB.validiteDuree || 60,
             conditions: devisDataFromDB.conditions || '',
             notes: devisDataFromDB.notes || '',
-            validiteTexte: devisDataFromDB.validiteTexte || '60 jours'
+            validiteTexte: devisDataFromDB.validiteTexte || '60 jours',
+            conditionsAcceptation: devisDataFromDB.conditionsAcceptation || '',
+            champLibre: devisDataFromDB.champLibre || ''
           })
           
           // Set lignes from database
@@ -121,10 +126,19 @@ export default function DevisDetailPage() {
             setLignes(devisDataFromDB.lignes)
           }
           
-          // Set options from database
-          if (devisDataFromDB.options) {
-            setOptions(devisDataFromDB.options)
+          // Set options from database and activate champLibre if data exists
+          let updatedOptions = devisDataFromDB.options || {}
+          
+          // Activer automatiquement l'option champLibre si des données existent
+          console.log('🔍 Checking champLibre data:', devisDataFromDB.champLibre)
+          if (devisDataFromDB.champLibre && devisDataFromDB.champLibre.trim() !== '') {
+            console.log('✅ Activating champLibre option because data exists:', devisDataFromDB.champLibre)
+            updatedOptions = { ...updatedOptions, champLibre: true }
+          } else {
+            console.log('❌ No champLibre data found or empty')
           }
+          
+          setOptions(prev => ({ ...prev, ...updatedOptions }))
           
           // Set other fields
           if (devisDataFromDB.adresseLivraison) {
@@ -491,6 +505,8 @@ export default function DevisDetailPage() {
         montantTotalTTC: totalTTC,
         conditions: devisData.conditions,
         notes: devisData.notes,
+        conditionsAcceptation: devisData.conditionsAcceptation,
+        champLibre: devisData.champLibre,
         options: options,
         adresseLivraison: options.adresseLivraison ? adresseLivraison : null,
         intituleDocument: options.intituleDocument ? intituleDocument : null,
@@ -582,6 +598,8 @@ export default function DevisDetailPage() {
         montantTotalTTC: totalTTC,
         conditions: devisData.conditions,
         notes: devisData.notes,
+        conditionsAcceptation: devisData.conditionsAcceptation,
+        champLibre: devisData.champLibre,
         options: options,
         adresseLivraison: options.adresseLivraison ? adresseLivraison : null,
         intituleDocument: options.intituleDocument ? intituleDocument : null,
@@ -672,19 +690,25 @@ export default function DevisDetailPage() {
         numeroDevis: devisData.numeroDevis || '',
         dateCreation: devisData.dateCreation || new Date().toISOString(),
         validiteTexte: devisData.validiteTexte || '30 jours',
+        customCompanyInfo: devisDataFromDB?.customCompanyInfo,
+        intituleDocument: intituleDocument,
         lignes: lignes.map(ligne => ({
           designation: ligne.designation,
+          description: ligne.description || '',
           quantite: ligne.quantite,
           unite: ligne.unite || '',
           prixUnitaireHT: ligne.prixUnitaireHT,
           tauxTVA: ligne.tauxTVA,
-          montantHT: ligne.montantHT
+          montantHT: ligne.montantHT,
+          remise: ligne.remise || 0
         })),
         montantTotalHT: totalHT,
         montantTotalTVA: totalTVA,
         montantTotalTTC: totalTTC,
         conditions: devisData.conditions,
         notes: devisData.notes,
+        conditionsAcceptation: devisDataFromDB?.conditionsAcceptation,
+        champLibre: devisData.champLibre,
         options: options,
         adresseLivraison: adresseLivraison,
         remiseGlobale: options.remiseGlobale ? remiseGlobale : undefined,
@@ -738,19 +762,25 @@ export default function DevisDetailPage() {
         numeroDevis: devisData.numeroDevis || '',
         dateCreation: devisData.dateCreation || new Date().toISOString(),
         validiteTexte: devisData.validiteTexte || '30 jours',
+        customCompanyInfo: devisDataFromDB?.customCompanyInfo,
+        intituleDocument: intituleDocument,
         lignes: lignes.map(ligne => ({
           designation: ligne.designation,
+          description: ligne.description,
           quantite: ligne.quantite,
           unite: ligne.unite || '',
           prixUnitaireHT: ligne.prixUnitaireHT,
           tauxTVA: ligne.tauxTVA,
-          montantHT: ligne.montantHT
+          montantHT: ligne.montantHT,
+          remise: ligne.remise
         })),
         montantTotalHT: totalHT,
         montantTotalTVA: totalTVA,
         montantTotalTTC: totalTTC,
         conditions: devisData.conditions,
         notes: devisData.notes,
+        conditionsAcceptation: devisDataFromDB?.conditionsAcceptation,
+        champLibre: devisData.champLibre,
         options: options,
         adresseLivraison: adresseLivraison,
         remiseGlobale: options.remiseGlobale ? remiseGlobale : undefined,
@@ -983,34 +1013,88 @@ export default function DevisDetailPage() {
                   <Input
                     placeholder="Nom du client"
                     value={clientSearch}
-                    readOnly
-                    className="h-8 text-sm pr-8 bg-gray-50"
+                    onChange={(e) => {
+                      setClientSearch(e.target.value)
+                      setShowClientDropdown(true)
+                    }}
+                    onFocus={() => setShowClientDropdown(true)}
+                    className={`h-8 text-sm pr-8 ${!clientSearch ? 'bg-blue-50' : ''}`}
                   />
+                  {(clientSearch || selectedClient) && (
+                    <button
+                      onClick={() => {
+                        setClientSearch('')
+                        setSelectedClient(null)
+                        setShowClientDropdown(false)
+                      }}
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                  {showClientDropdown && (
+                    <div className="absolute top-full left-0 right-0 z-10 mt-1 max-h-60 overflow-y-auto bg-white border rounded-md shadow-lg">
+                      <div className="p-2">
+                        {filteredClients.length > 0 ? (
+                          <div className="space-y-1">
+                            {filteredClients.map((client) => (
+                              <div
+                                key={client.id}
+                                className="p-2 hover:bg-gray-100 cursor-pointer rounded"
+                                onClick={() => handleClientSelect(client)}
+                              >
+                                <div className="font-medium text-sm">
+                                  {client.typeClient === 'entreprise' ? client.nomEntreprise : `${client.nom} ${client.prenom}`}
+                                </div>
+                                <div className="text-xs text-gray-500">{client.email}</div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="p-2 text-sm">Aucun client trouvé</div>
+                        )}
+                        <Separator className="my-2" />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full justify-start text-green-600"
+                          onClick={handleCreateClient}
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Ajouter un client
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <Input
                   placeholder="Adresse"
                   value={selectedClient?.adresse || ''}
-                  readOnly
-                  className="h-8 text-sm bg-gray-50"
+                  onChange={() => {}} // Controlled by selectedClient
+                  readOnly={!!selectedClient}
+                  className="h-8 text-sm"
                 />
                 <Input
                   placeholder="Complément d'adresse"
                   value={selectedClient?.complementAdresse || ''}
-                  readOnly
-                  className="h-8 text-sm bg-gray-50"
+                  onChange={() => {}} // Controlled by selectedClient
+                  readOnly={!!selectedClient}
+                  className="h-8 text-sm"
                 />
                 <div className="flex gap-2">
                   <Input
                     placeholder="Code postal"
                     value={selectedClient?.codePostal || ''}
-                    readOnly
-                    className="h-8 text-sm flex-1 bg-gray-50"
+                    onChange={() => {}} // Controlled by selectedClient
+                    readOnly={!!selectedClient}
+                    className="h-8 text-sm flex-1"
                   />
                   <Input
                     placeholder="Ville"
                     value={selectedClient?.ville || ''}
-                    readOnly
-                    className="h-8 text-sm flex-2 bg-gray-50"
+                    onChange={() => {}} // Controlled by selectedClient
+                    readOnly={!!selectedClient}
+                    className="h-8 text-sm flex-2"
                   />
                 </div>
 
@@ -1020,9 +1104,9 @@ export default function DevisDetailPage() {
                     <Label className="text-xs font-medium text-gray-700">SIRET</Label>
                     <Input
                       value={clientSiret}
-                      readOnly
+                      onChange={(e) => setClientSiret(e.target.value)}
                       placeholder="12345678901234"
-                      className="h-8 text-sm mt-1 bg-gray-50"
+                      className="h-8 text-sm mt-1"
                     />
                   </div>
                 )}
@@ -1033,9 +1117,9 @@ export default function DevisDetailPage() {
                     <Label className="text-xs font-medium text-gray-700">TVA intracommunautaire</Label>
                     <Input
                       value={clientNumeroTVA}
-                      readOnly
+                      onChange={(e) => setClientNumeroTVA(e.target.value)}
                       placeholder="FR12345678901"
-                      className="h-8 text-sm mt-1 bg-gray-50"
+                      className="h-8 text-sm mt-1"
                     />
                   </div>
                 )}
@@ -1046,9 +1130,12 @@ export default function DevisDetailPage() {
             {/* Document Title - Conditional */}
             {options.intituleDocument && (
               <div className="mt-8 mb-6">
-                <div className="text-start text-lg font-bold px-2 py-1">
-                  {intituleDocument || 'DEVIS'}
-                </div>
+                <Input
+                  value={intituleDocument}
+                  onChange={(e) => setIntituleDocument(e.target.value)}
+                  className="text-start text-lg font-bold border-0 bg-transparent focus:bg-white focus:border focus:border-blue-200 px-2 py-1"
+                  placeholder="Intitulé du devis"
+                />
               </div>
             )}
 
@@ -1067,8 +1154,8 @@ export default function DevisDetailPage() {
                 <Input 
                   type="date" 
                   value={devisData.dateCreation}
-                  readOnly
-                  className="mt-1 h-8 text-sm bg-gray-50"
+                  onChange={(e) => setDevisData(prev => ({ ...prev, dateCreation: e.target.value }))}
+                  className="mt-1 h-8 text-sm"
                 />
               </div>
               <div>
@@ -1076,8 +1163,8 @@ export default function DevisDetailPage() {
                 <div className="flex items-center mt-1">
                   <Input 
                     value={devisData.validiteTexte}
-                    readOnly
-                    className="h-8 text-sm flex-1 bg-gray-50"
+                    onChange={(e) => setDevisData(prev => ({ ...prev, validiteTexte: e.target.value }))}
+                    className="h-8 text-sm flex-1"
                     placeholder="60 jours"
                   />
                 </div>
@@ -1590,10 +1677,53 @@ export default function DevisDetailPage() {
               devisId={params.id as string}
               devisConditionsAcceptation={devisDataFromDB?.conditionsAcceptation}
               devisCustomCompanyInfo={devisDataFromDB?.customCompanyInfo}
+              devisFreeFieldContent={devisData.champLibre}
               customConditionsText={devisDataFromDB?.conditionsAcceptation}
               onConditionsChange={(newConditions) => {
                 // Sauvegarder directement dans Firebase dans clients/{idclient}/devis/{iddevis}/conditionsAcceptation
                 console.log('💾 Sauvegarde conditions dans devis:', newConditions)
+              }}
+              onFreeFieldChange={async (newFreeField) => {
+                // Mettre à jour le state local
+                setDevisData(prev => ({ ...prev, champLibre: newFreeField }))
+                console.log('💾 Champ libre mis à jour:', newFreeField)
+                
+                // Sauvegarder immédiatement dans Firebase
+                if (!user?.uid) {
+                  console.error('❌ User UID is undefined, cannot save to Firebase')
+                  return
+                }
+                
+                try {
+                  const mainClientsQuery = query(
+                    collection(db, 'clients'),
+                    where('uidclient', '==', user.uid)
+                  )
+                  const mainClientsSnapshot = await getDocs(mainClientsQuery)
+                  
+                  if (!mainClientsSnapshot.empty) {
+                    const mainClientDoc = mainClientsSnapshot.docs[0]
+                    const mainClientId = mainClientDoc.id
+                    
+                    const devisRef = doc(db, `clients/${mainClientId}/devis`, params.id as string)
+                    
+                    // Préparer les données à sauvegarder en évitant les valeurs undefined
+                    const updateData: any = {
+                      champLibre: newFreeField || '',
+                      dateModification: new Date()
+                    }
+                    
+                    // Ajouter modifiePar seulement si user.uid est défini
+                    if (user.uid) {
+                      updateData.modifiePar = user.uid
+                    }
+                    
+                    await updateDoc(devisRef, updateData)
+                    console.log('✅ ChampLibre sauvegardé dans Firebase:', newFreeField)
+                  }
+                } catch (error) {
+                  console.error('❌ Erreur lors de la sauvegarde du champLibre:', error)
+                }
               }}
             />
           </div>
