@@ -65,7 +65,8 @@ export default function DevisDetailPage() {
     notes: '',
     validiteTexte: '60 jours', // Texte personnalisable pour la validité
     conditionsAcceptation: '',
-    champLibre: ''
+    champLibre: '',
+    motifExonerationTVA: 'aucun'
   })
   
   // État pour le numéro de devis généré
@@ -118,7 +119,8 @@ export default function DevisDetailPage() {
             notes: devisDataFromDB.notes || '',
             validiteTexte: devisDataFromDB.validiteTexte || '60 jours',
             conditionsAcceptation: devisDataFromDB.conditionsAcceptation || '',
-            champLibre: devisDataFromDB.champLibre || ''
+            champLibre: devisDataFromDB.champLibre || '',
+            motifExonerationTVA: devisDataFromDB.motifExonerationTVA || 'aucun'
           })
           
           // Set lignes from database
@@ -275,8 +277,24 @@ export default function DevisDetailPage() {
 
   const { sousTotal, remiseHT, totalHT, totalTVA, totalTTC } = calculateTotals()
   
-  // Vérifier si toutes les TVA sont à 0%
-  const allTVAZero = lignes.every(ligne => ligne.tauxTVA === 0)
+  // Vérifier si au moins une TVA est à 0%
+  const anyTVAZero = lignes.some(ligne => ligne.tauxTVA === 0)
+
+  // Fonction pour obtenir le texte d'exonération de TVA
+  const getMotifExonerationText = (motif: string) => {
+    switch (motif) {
+      case 'aucun':
+        return 'Aucun motif d\'exonération de TVA'
+      case 'non_soumis':
+        return 'TVA non applicable, art. 293 B du CGI'
+      case 'france_sans_tva':
+        return 'TVA non applicable'
+      case 'hors_france':
+        return 'Autoliquidation'
+      default:
+        return 'Aucun motif d\'exonération de TVA'
+    }
+  }
 
   // Update line amount when quantity, price or discount changes
   const updateLigne = (id: string, field: keyof DevisLine, value: any) => {
@@ -430,7 +448,10 @@ export default function DevisDetailPage() {
         type: 'devis',
         conditions: devisData.conditions || '',
         notes: devisData.notes || '',
-        options: options,
+        options: {
+          ...options,
+          typeFacturation: options.typeFacturation as 'rapide' | 'complet'
+        },
         adresseLivraison: options.adresseLivraison ? adresseLivraison : null,
         intituleDocument: options.intituleDocument ? intituleDocument : null,
         remiseGlobale: options.remiseGlobale ? remiseGlobale : null,
@@ -465,6 +486,52 @@ export default function DevisDetailPage() {
     console.log('=== FIN CRÉATION BROUILLON ===')
   }
 
+  // Validation des données avant sauvegarde
+  const validerDonnees = () => {
+    // Vérifier qu'un client est sélectionné
+    if (!selectedClient) {
+      return {
+        valide: false,
+        message: "Vous devez sélectionner un client pour enregistrer le devis."
+      }
+    }
+    
+    // Filtrer les lignes non-designation pour la validation
+    const lignesNonDesignation = lignes.filter(ligne => !ligne.isDesignationOnly)
+    
+    // Vérifier qu'il y a au moins une prestation/produit
+    if (lignesNonDesignation.length === 0) {
+      return {
+        valide: false,
+        message: "Aucune prestation ou produit n'a été ajouté. Veuillez ajouter au moins un élément à votre devis."
+      }
+    }
+    
+    // Vérifier que toutes les lignes non-designation ont les champs obligatoires remplis
+    for (const ligne of lignesNonDesignation) {
+      if (!ligne.designation.trim()) {
+        return {
+          valide: false,
+          message: "Une ou plusieurs lignes sont incomplètes. Veuillez remplir la désignation de toutes les prestations et produits."
+        }
+      }
+      if (ligne.quantite <= 0) {
+        return {
+          valide: false,
+          message: "Une ou plusieurs lignes sont incomplètes. La quantité doit être supérieure à 0 pour toutes les prestations et produits."
+        }
+      }
+      if (ligne.prixUnitaireHT < 0) {
+        return {
+          valide: false,
+          message: "Une ou plusieurs lignes sont incomplètes. Le prix unitaire ne peut pas être négatif."
+        }
+      }
+    }
+    
+    return { valide: true, message: "" }
+  }
+
   // Sauvegarder les modifications du devis
   const sauvegarderDevis = async () => {
     if (!user?.uid || !params.id) {
@@ -472,46 +539,78 @@ export default function DevisDetailPage() {
       return
     }
 
+    // Valider les données avant sauvegarde
+    const validation = validerDonnees()
+    if (!validation.valide) {
+      toast.error(validation.message, {
+        style: {
+          color: '#dc2626',
+          fontWeight: 'bold'
+        }
+      })
+      return
+    }
+
     setIsAutoSaving(true)
     try {
       console.log('Sauvegarde des modifications du devis:', params.id)
       
-      const devisDataToSave = {
+      // Préparer les données en évitant les valeurs undefined
+      const devisDataToSave: any = {
         dateCreation: devisData.dateCreation ? new Date(devisData.dateCreation) : serverTimestamp(),
         dateValidite: devisData.dateValidite ? new Date(devisData.dateValidite) : new Date(),
-        validiteDuree: devisData.validiteDuree,
-        validiteTexte: devisData.validiteTexte,
+        validiteDuree: devisData.validiteDuree || 60,
+        validiteTexte: devisData.validiteTexte || '60 jours',
         clientId: selectedClient?.id || null,
         clientNom: selectedClient ? (selectedClient.typeClient === 'entreprise' ? selectedClient.nomEntreprise : `${selectedClient.nom} ${selectedClient.prenom}`) : '',
         clientEmail: selectedClient?.email || '',
-        clientSiret: options.siretClient ? clientSiret : (selectedClient?.siret || ''),
-        clientNumeroTVA: options.tvaIntracommunautaire ? clientNumeroTVA : (selectedClient?.numeroTVA || ''),
+        clientSiret: options.siretClient ? (clientSiret || '') : (selectedClient?.siret || ''),
+        clientNumeroTVA: options.tvaIntracommunautaire ? (clientNumeroTVA || '') : (selectedClient?.numeroTVA || ''),
         clientCodeAPE: selectedClient?.codeAPE || '',
-        numeroDevis: devisData.numeroDevis,
+        numeroDevis: devisData.numeroDevis || '',
         lignes: lignes.map(ligne => ({
-          id: ligne.id,
-          designation: ligne.designation,
-          quantite: ligne.quantite,
-          unite: ligne.unite,
-          prixUnitaireHT: ligne.prixUnitaireHT,
-          remise: ligne.remise,
-          montantHT: ligne.montantHT,
-          tauxTVA: ligne.tauxTVA,
-          typePrestation: ligne.typePrestation,
-          isDesignationOnly: ligne.isDesignationOnly
+          id: ligne.id || '',
+          designation: ligne.designation || '',
+          quantite: ligne.quantite || 0,
+          unite: ligne.unite || '',
+          prixUnitaireHT: ligne.prixUnitaireHT || 0,
+          remise: ligne.remise || 0,
+          montantHT: ligne.montantHT || 0,
+          tauxTVA: ligne.tauxTVA || 0,
+          typePrestation: ligne.typePrestation || '',
+          isDesignationOnly: ligne.isDesignationOnly || false
         })),
-        montantTotalHT: totalHT,
-        montantTotalTVA: totalTVA,
-        montantTotalTTC: totalTTC,
-        conditions: devisData.conditions,
-        notes: devisData.notes,
-        conditionsAcceptation: devisData.conditionsAcceptation,
-        champLibre: devisData.champLibre,
-        options: options,
-        adresseLivraison: options.adresseLivraison ? adresseLivraison : null,
-        intituleDocument: options.intituleDocument ? intituleDocument : null,
-        remiseGlobale: options.remiseGlobale ? remiseGlobale : null,
+        montantTotalHT: totalHT || 0,
+        montantTotalTVA: totalTVA || 0,
+        montantTotalTTC: totalTTC || 0,
+        conditions: devisData.conditions || '',
+        notes: devisData.notes || '',
+        conditionsAcceptation: devisData.conditionsAcceptation || '',
+        champLibre: devisData.champLibre || '',
+        motifExonerationTVA: devisData.motifExonerationTVA,
+        options: {
+          ...options,
+          typeFacturation: options.typeFacturation as 'rapide' | 'complet'
+        },
         lastModified: serverTimestamp()
+      }
+
+      // Ajouter les champs optionnels seulement s'ils ne sont pas null/undefined
+      if (options.adresseLivraison && adresseLivraison) {
+        devisDataToSave.adresseLivraison = adresseLivraison
+      }
+      
+      if (options.intituleDocument && intituleDocument) {
+        devisDataToSave.intituleDocument = intituleDocument
+      }
+      
+      if (options.remiseGlobale && remiseGlobale) {
+        devisDataToSave.remiseGlobale = remiseGlobale
+      }
+      
+      // Ajouter modifiePar seulement si user.uid existe
+      if (user?.uid) {
+        devisDataToSave.modifiePar = user.uid
       }
 
       console.log('Données à sauvegarder:', devisDataToSave)
@@ -599,8 +698,12 @@ export default function DevisDetailPage() {
         conditions: devisData.conditions,
         notes: devisData.notes,
         conditionsAcceptation: devisData.conditionsAcceptation,
-        champLibre: devisData.champLibre,
-        options: options,
+        champLibre: devisData.champLibre || '',
+        motifExonerationTVA: devisData.motifExonerationTVA,
+        options: {
+          ...options,
+          typeFacturation: options.typeFacturation as 'rapide' | 'complet'
+        },
         adresseLivraison: options.adresseLivraison ? adresseLivraison : null,
         intituleDocument: options.intituleDocument ? intituleDocument : null,
         remiseGlobale: options.remiseGlobale ? remiseGlobale : null,
@@ -700,7 +803,8 @@ export default function DevisDetailPage() {
           prixUnitaireHT: ligne.prixUnitaireHT,
           tauxTVA: ligne.tauxTVA,
           montantHT: ligne.montantHT,
-          remise: ligne.remise || 0
+          remise: ligne.remise || 0,
+          isDesignationOnly: ligne.isDesignationOnly
         })),
         montantTotalHT: totalHT,
         montantTotalTVA: totalTVA,
@@ -708,8 +812,12 @@ export default function DevisDetailPage() {
         conditions: devisData.conditions,
         notes: devisData.notes,
         conditionsAcceptation: devisDataFromDB?.conditionsAcceptation,
-        champLibre: devisData.champLibre,
-        options: options,
+        champLibre: devisData.champLibre || '',
+        motifExonerationTVA: devisData.motifExonerationTVA,
+        options: {
+          ...options,
+          typeFacturation: options.typeFacturation as 'rapide' | 'complet'
+        },
         adresseLivraison: adresseLivraison,
         remiseGlobale: options.remiseGlobale ? remiseGlobale : undefined,
         sousTotal: options.remiseGlobale ? sousTotal : undefined,
@@ -772,7 +880,8 @@ export default function DevisDetailPage() {
           prixUnitaireHT: ligne.prixUnitaireHT,
           tauxTVA: ligne.tauxTVA,
           montantHT: ligne.montantHT,
-          remise: ligne.remise
+          remise: ligne.remise,
+          isDesignationOnly: ligne.isDesignationOnly
         })),
         montantTotalHT: totalHT,
         montantTotalTVA: totalTVA,
@@ -780,8 +889,12 @@ export default function DevisDetailPage() {
         conditions: devisData.conditions,
         notes: devisData.notes,
         conditionsAcceptation: devisDataFromDB?.conditionsAcceptation,
-        champLibre: devisData.champLibre,
-        options: options,
+        champLibre: devisData.champLibre || '',
+        motifExonerationTVA: devisData.motifExonerationTVA,
+        options: {
+          ...options,
+          typeFacturation: options.typeFacturation as 'rapide' | 'complet'
+        },
         adresseLivraison: adresseLivraison,
         remiseGlobale: options.remiseGlobale ? remiseGlobale : undefined,
         sousTotal: options.remiseGlobale ? sousTotal : undefined,
@@ -1641,18 +1754,18 @@ export default function DevisDetailPage() {
                     <span className="text-gray-600">Remise HT</span>
                     <span className="font-medium">-{remiseHT.toFixed(2)} €</span>
                   </div>
-                  <div className={`flex justify-between ${allTVAZero ? 'text-lg font-bold text-blue-600' : 'text-xs'}`}>
-                    <span className={allTVAZero ? '' : 'text-gray-600'}>Total HT</span>
-                    <span className={allTVAZero ? '' : 'font-medium'}>{totalHT.toFixed(2)} €</span>
+                  <div className={`flex justify-between ${anyTVAZero ? 'text-lg font-bold text-blue-600' : 'text-xs'}`}>
+                    <span className={anyTVAZero ? '' : 'text-gray-600'}>Total HT</span>
+                    <span className={anyTVAZero ? '' : 'font-medium'}>{totalHT.toFixed(2)} €</span>
                   </div>
                 </>
               ) : (
-                <div className={`flex justify-between ${allTVAZero ? 'text-lg font-bold text-blue-600' : 'text-xs'}`}>
-                  <span className={allTVAZero ? '' : 'text-gray-600'}>Total HT</span>
-                  <span className={allTVAZero ? '' : 'font-medium'}>{totalHT.toFixed(2)} €</span>
+                <div className={`flex justify-between ${anyTVAZero ? 'text-lg font-bold text-blue-600' : 'text-xs'}`}>
+                  <span className={anyTVAZero ? '' : 'text-gray-600'}>Total HT</span>
+                  <span className={anyTVAZero ? '' : 'font-medium'}>{totalHT.toFixed(2)} €</span>
                 </div>
               )}
-              {!allTVAZero && (
+              {!anyTVAZero && (
                 <>
                   <div className="flex justify-between text-xs">
                     <span className="text-gray-600">TVA</span>
@@ -1669,6 +1782,70 @@ export default function DevisDetailPage() {
             {/* Spacer to push footer to bottom */}
             <div className="flex-grow"></div>
             
+            {/* Justification d'absence de TVA si au moins une TVA est à 0% */}
+            {anyTVAZero && (
+              <div className="border-t border-gray-200 pt-4 space-y-3">
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium text-gray-700">Motif d'exonération de TVA</Label>
+                  <Select value={devisData.motifExonerationTVA} onValueChange={async (value) => {
+                    // Mettre à jour le state local
+                    setDevisData(prev => ({ ...prev, motifExonerationTVA: value }))
+                    console.log('💾 Motif exonération TVA mis à jour:', value)
+                    
+                    // Sauvegarder immédiatement dans Firebase
+                    if (!user?.uid) {
+                      console.error('❌ User UID is undefined, cannot save to Firebase')
+                      return
+                    }
+                    
+                    try {
+                      const mainClientsQuery = query(
+                        collection(db, 'clients'),
+                        where('uidclient', '==', user.uid)
+                      )
+                      const mainClientsSnapshot = await getDocs(mainClientsQuery)
+                      
+                      if (!mainClientsSnapshot.empty) {
+                        const mainClientDoc = mainClientsSnapshot.docs[0]
+                        const mainClientId = mainClientDoc.id
+                        
+                        const devisRef = doc(db, `clients/${mainClientId}/devis`, params.id as string)
+                        
+                        // Préparer les données à sauvegarder en évitant les valeurs undefined
+                        const updateData: any = {
+                          motifExonerationTVA: value || 'aucun',
+                          dateModification: new Date()
+                        }
+                        
+                        // Ajouter modifiePar seulement si user.uid est défini
+                        if (user.uid) {
+                          updateData.modifiePar = user.uid
+                        }
+                        
+                        await updateDoc(devisRef, updateData)
+                        console.log('✅ Motif exonération TVA sauvegardé dans Firebase:', value)
+                      }
+                    } catch (error) {
+                      console.error('❌ Erreur lors de la sauvegarde du motif exonération TVA:', error)
+                    }
+                  }}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Sélectionner un motif" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="aucun">Aucun motif</SelectItem>
+                      <SelectItem value="non_soumis">Je ne suis pas soumis à la TVA</SelectItem>
+                      <SelectItem value="france_sans_tva">Prestation France sans TVA</SelectItem>
+                      <SelectItem value="hors_france">Prestation Hors France</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
+                  {getMotifExonerationText(devisData.motifExonerationTVA)}
+                </div>
+              </div>
+            )}
+
             {/* Footer with legal text and company info */}
             <DevisFooter 
               showConditions={options.conditionsAcceptation} 
