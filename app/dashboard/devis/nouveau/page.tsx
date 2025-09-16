@@ -57,7 +57,8 @@ export default function NouveauDevisPage() {
     conditions: '',
     notes: '',
     validiteTexte: '60 jours', // Texte personnalisable pour la validité
-    conditionsAcceptation: 'Pour être accepté, le devis doit être daté, signé et suivi de la mention manuscrite « Bon pour accord ».'
+    conditionsAcceptation: 'Pour être accepté, le devis doit être daté, signé et suivi de la mention manuscrite « Bon pour accord ».',
+    champLibre: ''
   })
   
   // État pour le numéro de devis généré
@@ -334,6 +335,7 @@ export default function NouveauDevisPage() {
         conditions: devisData.conditions || '',
         notes: devisData.notes || '',
         conditionsAcceptation: localStates.localConditionsAcceptation || devisData.conditionsAcceptation || 'Pour être accepté, le devis doit être daté, signé et suivi de la mention manuscrite « Bon pour accord ».',
+        champLibre: devisData.champLibre || '',
         customCompanyInfo: localStates.localCustomCompanyInfo || '',
         options: options,
         adresseLivraison: options.adresseLivraison ? adresseLivraison : null,
@@ -431,6 +433,7 @@ export default function NouveauDevisPage() {
         conditions: devisData.conditions,
         notes: devisData.notes,
         conditionsAcceptation: devisData.conditionsAcceptation,
+        champLibre: devisData.champLibre,
         options: options,
         adresseLivraison: options.adresseLivraison ? adresseLivraison : null,
         intituleDocument: options.intituleDocument ? intituleDocument : null,
@@ -548,6 +551,7 @@ export default function NouveauDevisPage() {
         conditions: devisData.conditions,
         notes: devisData.notes,
         conditionsAcceptation: devisData.conditionsAcceptation,
+        champLibre: devisData.champLibre,
         options: options,
         uidclient: user?.uid
       }
@@ -1395,12 +1399,15 @@ export default function NouveauDevisPage() {
             <DevisFooter 
               showConditions={options.conditionsAcceptation}
               showCompanyInfo={options.siretClient}
-              showFreeField={false}
+              showFreeField={options.champLibre}
               customConditionsText={devisData.conditionsAcceptation}
               devisId={brouillonId || "FORCE_DEVIS_MODE"}
               devisConditionsAcceptation={devisData.conditionsAcceptation}
               onConditionsChange={(newConditions) => {
                 setDevisData(prev => ({ ...prev, conditionsAcceptation: newConditions }))
+              }}
+              onFreeFieldChange={(newFreeField) => {
+                setDevisData(prev => ({ ...prev, champLibre: newFreeField }))
               }}
               onGetLocalStates={getLocalStatesRef}
             />
