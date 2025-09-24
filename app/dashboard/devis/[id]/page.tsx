@@ -35,6 +35,7 @@ interface DevisLine {
   tauxTVA: number
   typePrestation?: string
   isDesignationOnly?: boolean
+  isRemiseGlobale?: boolean
 }
 
 export default function DevisDetailPage() {
@@ -153,6 +154,11 @@ export default function DevisDetailPage() {
           
           if (devisDataFromDB.remiseGlobale) {
             setRemiseGlobale(devisDataFromDB.remiseGlobale)
+            // Activer automatiquement l'option si une remise existe
+            if (devisDataFromDB.remiseGlobale.montant > 0) {
+              console.log('✅ Activation automatique de l\'option remiseGlobale car remise détectée:', devisDataFromDB.remiseGlobale)
+              updatedOptions = { ...updatedOptions, remiseGlobale: true }
+            }
           }
           
           if (devisDataFromDB.clientSiret) {
@@ -265,12 +271,12 @@ export default function DevisDetailPage() {
   // Calculate totals
   const calculateTotals = () => {
     const sousTotal = lignes.reduce((sum, ligne) => sum + ligne.montantHT, 0)
-    const remiseHT = options.remiseGlobale ? (sousTotal * remiseGlobale.pourcentage / 100) : 0
+    const remiseHT = (options.remiseGlobale && remiseGlobale && remiseGlobale.pourcentage > 0) ? (sousTotal * remiseGlobale.pourcentage / 100) : 0
     const totalHT = sousTotal - remiseHT
     const totalTVA = lignes.reduce((sum, ligne) => {
       const ligneHT = ligne.montantHT
       return sum + (ligneHT * ligne.tauxTVA / 100)
-    }, 0) - (remiseHT * 0.2) // Apply discount to TVA as well
+    }, 0)
     const totalTTC = totalHT + totalTVA
     return { sousTotal, remiseHT, totalHT, totalTVA, totalTTC }
   }
@@ -450,7 +456,8 @@ export default function DevisDetailPage() {
         notes: devisData.notes || '',
         options: {
           ...options,
-          typeFacturation: options.typeFacturation as 'rapide' | 'complet'
+          typeFacturation: options.typeFacturation as 'rapide' | 'complet',
+          remiseGlobale: (remiseGlobale && remiseGlobale.montant > 0) || options.remiseGlobale
         },
         adresseLivraison: options.adresseLivraison ? adresseLivraison : null,
         intituleDocument: options.intituleDocument ? intituleDocument : null,
@@ -590,7 +597,8 @@ export default function DevisDetailPage() {
         motifExonerationTVA: devisData.motifExonerationTVA,
         options: {
           ...options,
-          typeFacturation: options.typeFacturation as 'rapide' | 'complet'
+          typeFacturation: options.typeFacturation as 'rapide' | 'complet',
+          remiseGlobale: (remiseGlobale && remiseGlobale.montant > 0) || options.remiseGlobale
         },
         lastModified: serverTimestamp()
       }
@@ -702,7 +710,8 @@ export default function DevisDetailPage() {
         motifExonerationTVA: devisData.motifExonerationTVA,
         options: {
           ...options,
-          typeFacturation: options.typeFacturation as 'rapide' | 'complet'
+          typeFacturation: options.typeFacturation as 'rapide' | 'complet',
+          remiseGlobale: (remiseGlobale && remiseGlobale.montant > 0) || options.remiseGlobale
         },
         adresseLivraison: options.adresseLivraison ? adresseLivraison : null,
         intituleDocument: options.intituleDocument ? intituleDocument : null,
@@ -786,6 +795,16 @@ export default function DevisDetailPage() {
 
   const handleDownloadPDF = async () => {
     try {
+      // Debug: Afficher les données de remise globale
+      console.log('🔍 Debug remise globale:')
+      console.log('- remiseGlobale state:', remiseGlobale)
+      console.log('- options.remiseGlobale:', options.remiseGlobale)
+      console.log('- sousTotal:', sousTotal)
+      console.log('- remiseHT:', remiseHT)
+      console.log('- totalHT:', totalHT)
+      console.log('- lignes:', lignes)
+      console.log('- calculateTotals():', calculateTotals())
+      
       // Sauvegarder les modifications avant de télécharger le PDF
       await sauvegarderDevis()
       
@@ -795,17 +814,32 @@ export default function DevisDetailPage() {
         validiteTexte: devisData.validiteTexte || '30 jours',
         customCompanyInfo: devisDataFromDB?.customCompanyInfo,
         intituleDocument: intituleDocument,
-        lignes: lignes.map(ligne => ({
-          designation: ligne.designation,
-          description: ligne.description || '',
-          quantite: ligne.quantite,
-          unite: ligne.unite || '',
-          prixUnitaireHT: ligne.prixUnitaireHT,
-          tauxTVA: ligne.tauxTVA,
-          montantHT: ligne.montantHT,
-          remise: ligne.remise || 0,
-          isDesignationOnly: ligne.isDesignationOnly
-        })),
+        lignes: [
+          ...lignes.map(ligne => ({
+            designation: ligne.designation,
+            description: ligne.description || '',
+            quantite: ligne.quantite,
+            unite: ligne.unite || '',
+            prixUnitaireHT: ligne.prixUnitaireHT,
+            tauxTVA: ligne.tauxTVA,
+            montantHT: ligne.montantHT,
+            remise: ligne.remise || 0,
+            isDesignationOnly: ligne.isDesignationOnly
+          })),
+          // Ajouter la ligne de remise globale seulement si l'option est cochée
+          ...(options.remiseGlobale ? [{
+            designation: 'Remise globale',
+            description: '',
+            quantite: 1,
+            unite: '%',
+            prixUnitaireHT: remiseGlobale?.pourcentage || 0,
+            tauxTVA: 0,
+            montantHT: -remiseHT,
+            remise: 0,
+            isDesignationOnly: false,
+            isRemiseGlobale: true
+          }] : [])
+        ],
         montantTotalHT: totalHT,
         montantTotalTVA: totalTVA,
         montantTotalTTC: totalTTC,
@@ -816,12 +850,13 @@ export default function DevisDetailPage() {
         motifExonerationTVA: devisData.motifExonerationTVA,
         options: {
           ...options,
-          typeFacturation: options.typeFacturation as 'rapide' | 'complet'
+          typeFacturation: options.typeFacturation as 'rapide' | 'complet',
+          remiseGlobale: (remiseGlobale && remiseGlobale.montant > 0) || options.remiseGlobale
         },
         adresseLivraison: adresseLivraison,
-        remiseGlobale: options.remiseGlobale ? remiseGlobale : undefined,
-        sousTotal: options.remiseGlobale ? sousTotal : undefined,
-        remiseHT: options.remiseGlobale ? remiseHT : undefined
+        remiseGlobale: remiseGlobale,
+        sousTotal: sousTotal,
+        remiseHT: remiseHT
       }
 
       const clientForPDF = {
@@ -872,17 +907,32 @@ export default function DevisDetailPage() {
         validiteTexte: devisData.validiteTexte || '30 jours',
         customCompanyInfo: devisDataFromDB?.customCompanyInfo,
         intituleDocument: intituleDocument,
-        lignes: lignes.map(ligne => ({
-          designation: ligne.designation,
-          description: ligne.description,
-          quantite: ligne.quantite,
-          unite: ligne.unite || '',
-          prixUnitaireHT: ligne.prixUnitaireHT,
-          tauxTVA: ligne.tauxTVA,
-          montantHT: ligne.montantHT,
-          remise: ligne.remise,
-          isDesignationOnly: ligne.isDesignationOnly
-        })),
+        lignes: [
+          ...lignes.map(ligne => ({
+            designation: ligne.designation,
+            description: ligne.description,
+            quantite: ligne.quantite,
+            unite: ligne.unite || '',
+            prixUnitaireHT: ligne.prixUnitaireHT,
+            tauxTVA: ligne.tauxTVA,
+            montantHT: ligne.montantHT,
+            remise: ligne.remise,
+            isDesignationOnly: ligne.isDesignationOnly
+          })),
+          // Ajouter la ligne de remise globale seulement si l'option est cochée
+          ...(options.remiseGlobale ? [{
+            designation: 'Remise globale',
+            description: '',
+            quantite: 1,
+            unite: '%',
+            prixUnitaireHT: remiseGlobale?.pourcentage || 0,
+            tauxTVA: 0,
+            montantHT: -remiseHT,
+            remise: 0,
+            isDesignationOnly: false,
+            isRemiseGlobale: true
+          }] : [])
+        ],
         montantTotalHT: totalHT,
         montantTotalTVA: totalTVA,
         montantTotalTTC: totalTTC,
@@ -893,12 +943,13 @@ export default function DevisDetailPage() {
         motifExonerationTVA: devisData.motifExonerationTVA,
         options: {
           ...options,
-          typeFacturation: options.typeFacturation as 'rapide' | 'complet'
+          typeFacturation: options.typeFacturation as 'rapide' | 'complet',
+          remiseGlobale: (remiseGlobale && remiseGlobale.montant > 0) || options.remiseGlobale
         },
         adresseLivraison: adresseLivraison,
-        remiseGlobale: options.remiseGlobale ? remiseGlobale : undefined,
-        sousTotal: options.remiseGlobale ? sousTotal : undefined,
-        remiseHT: options.remiseGlobale ? remiseHT : undefined
+        remiseGlobale: remiseGlobale,
+        sousTotal: sousTotal,
+        remiseHT: remiseHT
       }
 
       const clientForPDF = {
@@ -1327,7 +1378,7 @@ export default function DevisDetailPage() {
                       </thead>
                       <tbody>
                         {lignes.map((ligne, index) => (
-                          <tr key={ligne.id} className={`border-t ${ligne.isDesignationOnly ? 'bg-gray-50' : ''} group hover:bg-gray-50 relative`}>
+                          <tr key={ligne.id || `ligne-rapide-${index}`} className={`border-t ${ligne.isDesignationOnly ? 'bg-gray-50' : ''} group hover:bg-gray-50 relative`}>
                           {ligne.isDesignationOnly ? (
                             <td className="p-2 relative" colSpan={3}>
                               <Input
@@ -1476,7 +1527,7 @@ export default function DevisDetailPage() {
                       </thead>
                       <tbody>
                         {lignes.map((ligne, index) => (
-                          <tr key={ligne.id} className={`border-t ${ligne.isDesignationOnly ? 'bg-gray-50' : ''} group hover:bg-gray-50 relative`}>
+                          <tr key={ligne.id || `ligne-complet-${index}`} className={`border-t ${ligne.isDesignationOnly ? 'bg-gray-50' : ''} group hover:bg-gray-50 relative`}>
                           {ligne.isDesignationOnly ? (
                             <td className="p-2 border-r border-gray-200 relative" colSpan={6}>
                               <Input
@@ -1747,25 +1798,25 @@ export default function DevisDetailPage() {
               {options.remiseGlobale && remiseHT > 0 ? (
                 <>
                   <div className="flex justify-between text-xs">
-                    <span className="text-gray-600">Sous-total HT</span>
+                    <span className="text-gray-600">{totalTVA > 0 ? 'Sous-total HT' : 'Sous-total'}</span>
                     <span className="font-medium">{sousTotal.toFixed(2)} €</span>
                   </div>
                   <div className="flex justify-between text-xs">
-                    <span className="text-gray-600">Remise HT</span>
+                    <span className="text-gray-600">{totalTVA > 0 ? 'Remise HT' : 'Remise'}</span>
                     <span className="font-medium">-{remiseHT.toFixed(2)} €</span>
                   </div>
                   <div className={`flex justify-between ${anyTVAZero ? 'text-lg font-bold text-blue-600' : 'text-xs'}`}>
-                    <span className={anyTVAZero ? '' : 'text-gray-600'}>Total HT</span>
+                    <span className={anyTVAZero ? '' : 'text-gray-600'}>{totalTVA > 0 ? 'Total HT' : 'Total'}</span>
                     <span className={anyTVAZero ? '' : 'font-medium'}>{totalHT.toFixed(2)} €</span>
                   </div>
                 </>
               ) : (
                 <div className={`flex justify-between ${anyTVAZero ? 'text-lg font-bold text-blue-600' : 'text-xs'}`}>
-                  <span className={anyTVAZero ? '' : 'text-gray-600'}>Total HT</span>
+                  <span className={anyTVAZero ? '' : 'text-gray-600'}>{totalTVA > 0 ? 'Total HT' : 'Total'}</span>
                   <span className={anyTVAZero ? '' : 'font-medium'}>{totalHT.toFixed(2)} €</span>
                 </div>
               )}
-              {!anyTVAZero && (
+              {totalTVA > 0 && (
                 <>
                   <div className="flex justify-between text-xs">
                     <span className="text-gray-600">TVA</span>
