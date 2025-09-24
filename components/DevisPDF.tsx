@@ -51,6 +51,7 @@ interface LigneDevis {
   montantHT: number
   remise: number
   isDesignationOnly?: boolean
+  isRemiseGlobale?: boolean
 }
 
 interface ClientData {
@@ -231,6 +232,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tableRowEven: { backgroundColor: '#f9fafb' },
+  tableRowRemise: { backgroundColor: '#e9eff7', borderTopWidth: 1, borderTopColor: '#2563eb' },
   tableText: {
     fontSize: 10,
     color: '#111827',
@@ -342,6 +344,14 @@ const DevisPDF: React.FC<DevisPDFProps> = ({ devis, client, company }) => {
     new Date(dateString).toLocaleDateString('fr-FR')
 
   const formatPrice = (price: number) => `${price.toFixed(2)} €`
+
+  // Debug: Afficher les données reçues
+  console.log('🎯 DevisPDF - Données reçues:')
+  console.log('- devis.remiseGlobale:', devis.remiseGlobale)
+  console.log('- devis.sousTotal:', devis.sousTotal)
+  console.log('- devis.remiseHT:', devis.remiseHT)
+  console.log('- devis.options.remiseGlobale:', devis.options.remiseGlobale)
+  console.log('- devis.montantTotalHT:', devis.montantTotalHT)
 
   return (
     <Document>
@@ -476,10 +486,20 @@ const DevisPDF: React.FC<DevisPDFProps> = ({ devis, client, company }) => {
                       )}
                     </View>
                   </View>
+                ) : ligne.isRemiseGlobale ? (
+                  <View
+                    key={index}
+                    style={[styles.tableRow, styles.tableRowRemise]}
+                  >
+                    <View style={{ width: '40%', paddingRight: 10 }}>
+                      <Text style={styles.designationText}>{ligne.designation}</Text>
+                    </View>
+                    <Text style={[{ width: '40%', textAlign: 'right' }, styles.tableText]}>{ligne.prixUnitaireHT}%                                                    {formatPrice(ligne.montantHT)}</Text>
+                  </View>
                 ) : (
                   <View
                     key={index}
-                    style={[styles.tableRow, ...(index % 2 === 1 ? [styles.tableRowEven] : [])]}
+                    style={[styles.tableRow, { backgroundColor: '#ffffff' }]}
                   >
                     <View style={styles.colDesignationRapide}>
                       <Text style={styles.designationText}>{ligne.designation}</Text>
@@ -519,10 +539,20 @@ const DevisPDF: React.FC<DevisPDFProps> = ({ devis, client, company }) => {
                       )}
                     </View>
                   </View>
+                ) : ligne.isRemiseGlobale ? (
+                  <View
+                    key={index}
+                    style={[styles.tableRow, styles.tableRowRemise]}
+                  >
+                    <View style={{ width: '70%', paddingRight: 8 }}>
+                      <Text style={styles.designationText}>{ligne.designation}</Text>
+                    </View>
+                    <Text style={[{ width: '30%', textAlign: 'right' }, styles.tableText]}>{ligne.prixUnitaireHT}%               {formatPrice(ligne.montantHT)}</Text>
+                  </View>
                 ) : (
                   <View
                     key={index}
-                    style={[styles.tableRow, ...(index % 2 === 1 ? [styles.tableRowEven] : [])]}
+                    style={[styles.tableRow, { backgroundColor: '#ffffff' }]}
                   >
                     <View style={styles.colDesignationComplet}>
                       <Text style={styles.designationText}>{ligne.designation}</Text>
@@ -544,24 +574,24 @@ const DevisPDF: React.FC<DevisPDFProps> = ({ devis, client, company }) => {
 
         {/* TOTAUX */}
         <View style={styles.totalsSection}>
-          {devis.options.remiseGlobale && devis.remiseGlobale && devis.remiseGlobale.montant > 0 ? (
+          {devis.options?.remiseGlobale ? (
             <>
               <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Sous-total HT</Text>
+                <Text style={styles.totalLabel}>{devis.montantTotalTVA > 0 ? 'Sous-total HT' : 'Sous-total'}</Text>
                 <Text style={styles.totalValue}>{formatPrice(devis.sousTotal || 0)}</Text>
               </View>
               <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Remise HT</Text>
-                <Text style={styles.totalValue}>-{formatPrice(devis.remiseGlobale?.montant || 0)}</Text>
+                <Text style={styles.totalLabel}>{devis.montantTotalTVA > 0 ? 'Remise HT' : 'Remise'}</Text>
+                <Text style={styles.totalValue}>-{formatPrice(devis.remiseHT || 0)}</Text>
               </View>
               <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Total HT</Text>
+                <Text style={styles.totalLabel}>{devis.montantTotalTVA > 0 ? 'Total HT' : 'Total'}</Text>
                 <Text style={styles.totalValue}>{formatPrice(devis.montantTotalHT)}</Text>
               </View>
             </>
           ) : (
             <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Total HT</Text>
+              <Text style={styles.totalLabel}>{devis.montantTotalTVA > 0 ? 'Total HT' : 'Total'}</Text>
               <Text style={styles.totalValue}>{formatPrice(devis.montantTotalHT)}</Text>
             </View>
           )}
