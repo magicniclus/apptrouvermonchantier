@@ -13,7 +13,8 @@ export default function DashboardLayout({
   const pathname = usePathname()
   
   // Pages without sidebar
-  if (pathname === '/dashboard/devis/nouveau' || pathname.startsWith('/dashboard/devis/')) {
+  if (pathname === '/dashboard/devis/nouveau' || pathname.startsWith('/dashboard/devis/') || 
+      pathname === '/dashboard/factures/nouveau' || pathname.startsWith('/dashboard/factures/')) {
     return <div className="min-h-screen">{children}</div>
   }
 
