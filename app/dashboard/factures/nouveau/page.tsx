@@ -330,19 +330,38 @@ export default function NouvelleFacturePage() {
       
       // Récupérer les states locaux du DevisFooter
       const localStates = getLocalStatesRef.current?.() || { localConditionsAcceptation: '', localCustomCompanyInfo: '' }
+      // S'assurer que localStates n'a pas de valeurs undefined
+      if (localStates.localConditionsAcceptation === undefined) localStates.localConditionsAcceptation = ''
+      if (localStates.localCustomCompanyInfo === undefined) localStates.localCustomCompanyInfo = ''
       
+      // S'assurer que toutes les variables ont des valeurs par défaut
+      const safeOptions = options || {}
+      const safeFactureData = factureData || {}
+      const safeSelectedClient = selectedClient || {}
+      const safeLignes = lignes || []
+      const safeAdresseLivraison = adresseLivraison || null
+      const safeIntituleDocument = intituleDocument || null
+      const safeRemiseGlobale = remiseGlobale || null
+      const safeClientSiret = clientSiret || ''
+      const safeClientNumeroTVA = clientNumeroTVA || ''
+      const safeMotifExonerationTVA = motifExonerationTVA || 'aucun'
+      const safeNumeroFacture = numeroFacture || ''
+      const safeTotalHT = totalHT || 0
+      const safeTotalTTC = totalTTC || 0
+      const safeTotalTVA = totalTVA || 0
+
       // Créer un brouillon avec structure conforme à la référence Firebase + compatibilité devis
       const brouillonData = {
         // === CHAMPS OBLIGATOIRES RÉFÉRENCE FIREBASE ===
-        numeroFacture: numeroFacture,
+        numeroFacture: safeNumeroFacture,
         clientId: selectedClient?.id || null,
         dateCreation: serverTimestamp(),
         dateEcheance: new Date(factureData.dateEcheance || new Date()),
         dateReglement: null,
         statut: 'brouillon', // Conforme à la référence (pas "status")
-        montantHT: totalHT || 0, // Conforme à la référence (pas "montantTotalHT")
-        montantTTC: totalTTC || 0, // Conforme à la référence (pas "montantTotalTTC")
-        montantTVA: totalTVA || 0, // Conforme à la référence (pas "montantTotalTVA")
+        montantHT: safeTotalHT, // Conforme à la référence (pas "montantTotalHT")
+        montantTTC: safeTotalTTC, // Conforme à la référence (pas "montantTotalTTC")
+        montantTVA: safeTotalTVA, // Conforme à la référence (pas "montantTotalTVA")
         tauxTVA: lignes.length > 0 ? lignes[0].tauxTVA : 20, // Taux principal
         devise: 'EUR',
         conditions: {
@@ -384,16 +403,16 @@ export default function NouvelleFacturePage() {
         
         // === CHAMPS SUPPLÉMENTAIRES POUR COMPATIBILITÉ DEVIS ===
         type: 'facture',
-        clientNom: selectedClient ? (selectedClient.typeClient === 'entreprise' ? selectedClient.nomEntreprise : `${selectedClient.nom} ${selectedClient.prenom}`) : '',
+        clientNom: selectedClient ? (selectedClient.typeClient === 'entreprise' ? (selectedClient.nomEntreprise || '') : `${selectedClient.nom || ''} ${selectedClient.prenom || ''}`.trim()) : '',
         clientEmail: selectedClient?.email || '',
-        clientSiret: options.siretClient ? clientSiret : (selectedClient?.siret || ''),
-        clientNumeroTVA: options.tvaIntracommunautaire ? clientNumeroTVA : (selectedClient?.numeroTVA || ''),
+        clientSiret: options.siretClient ? (clientSiret || '') : (selectedClient?.siret || ''),
+        clientNumeroTVA: options.tvaIntracommunautaire ? (clientNumeroTVA || '') : (selectedClient?.numeroTVA || ''),
         clientCodeAPE: selectedClient?.codeAPE || '',
-        echeanceDuree: factureData.echeanceDuree,
+        echeanceDuree: factureData.echeanceDuree || 30,
         echeanceTexte: factureData.echeanceTexte || '',
         conditionsAcceptation: localStates.localConditionsAcceptation || factureData.conditionsAcceptation || 'Facture payable dans les 30 jours suivant la date d\'émission.',
         champLibre: factureData.champLibre || '',
-        motifExonerationTVA: motifExonerationTVA || 'aucun',
+        motifExonerationTVA: (typeof motifExonerationTVA === 'string' && motifExonerationTVA) || 'aucun',
         customCompanyInfo: localStates.localCustomCompanyInfo || '',
         options: options,
         adresseLivraison: options.adresseLivraison ? adresseLivraison : null,
@@ -405,9 +424,37 @@ export default function NouvelleFacturePage() {
       }
 
       console.log('📝 Données du brouillon facture à créer:', brouillonData)
+
+      // Fonction pour nettoyer les valeurs undefined
+      const cleanObject = (obj: any): any => {
+        if (obj === null || obj === undefined) return null
+        if (typeof obj !== 'object' || Array.isArray(obj)) return obj
+        
+        // Gérer les objets Firebase spéciaux (serverTimestamp, etc.)
+        if (obj.constructor && obj.constructor.name !== 'Object') return obj
+        
+        const cleaned: { [key: string]: any } = {}
+        for (const [key, value] of Object.entries(obj)) {
+          if (value !== undefined) {
+            if (value === null) {
+              cleaned[key] = null
+            } else if (Array.isArray(value)) {
+              cleaned[key] = value.filter(item => item !== undefined)
+            } else if (typeof value === 'object' && value.constructor && value.constructor.name === 'Object') {
+              cleaned[key] = cleanObject(value)
+            } else {
+              cleaned[key] = value
+            }
+          }
+        }
+        return cleaned
+      }
+
+      const cleanedBrouillonData = cleanObject(brouillonData)
+      console.log('🧹 Données nettoyées (sans undefined):', cleanedBrouillonData)
       
       const facturesRef = collection(db, `clients/${mainClientDoc.id}/factures`)
-      const docRef = await addDoc(facturesRef, brouillonData)
+      const docRef = await addDoc(facturesRef, cleanedBrouillonData)
       
       console.log('🎉 SUCCÈS! Brouillon facture créé avec ID:', docRef.id)
       setBrouillonId(docRef.id)
