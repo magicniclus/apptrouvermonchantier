@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Separator } from '@/components/ui/separator'
-import { X, Upload, Plus, Trash2, Settings, FileText, Calendar, ArrowRight, ArrowLeft, ChevronDown, MoreHorizontal, Edit, Copy, Download, Eye } from 'lucide-react'
+import { X, Upload, Plus, Trash2, Settings, FileText, Calendar, ArrowRight, ArrowLeft, ChevronDown, MoreHorizontal, Edit, Copy, Download, Eye, Receipt } from 'lucide-react'
 import DevisFooter from '@/components/DevisFooter'
 import { useAuth } from '@/hooks/useAuth'
 import { useClients, Client } from '@/hooks/useClients'
@@ -55,33 +55,34 @@ export default function FactureDetailPage() {
   const [showClientDropdown, setShowClientDropdown] = useState(false)
   const [showOptions, setShowOptions] = useState(true)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [showConfirmFactureDialog, setShowConfirmFactureDialog] = useState(false)
   
-  // Devis data
-  const [devisData, setDevisData] = useState({
-    numeroDevis: '', // Sera généré automatiquement
+  // Facture data
+  const [factureData, setFactureData] = useState({
+    numeroFacture: '', // Sera généré automatiquement
     dateCreation: '',
-    dateValidite: '',
-    validiteDuree: 60,
+    dateEcheance: '',
+    echeanceDuree: 30,
     conditions: '',
     notes: '',
-    validiteTexte: '60 jours', // Texte personnalisable pour la validité
+    echeanceTexte: '30 jours', // Texte personnalisable pour l'échéance
     conditionsAcceptation: '',
     champLibre: '',
     motifExonerationTVA: 'aucun'
   })
   
-  // État pour le numéro de devis généré
-  const [numeroDevis, setNumeroDevis] = useState<string>('')
+  // État pour le numéro de facture généré
+  const [numeroFacture, setNumeroFacture] = useState<string>('')
   const [isGeneratingNumber, setIsGeneratingNumber] = useState(false)
   const [brouillonId, setBrouillonId] = useState<string | null>(null)
   const [showExitModal, setShowExitModal] = useState(false)
   const [isAutoSaving, setIsAutoSaving] = useState(false)
 
-  // Fetch devis data from Firebase
+  // Fetch facture data from Firebase
   useEffect(() => {
     if (!user || !params.id) return
 
-    const fetchDevis = async () => {
+    const fetchFacture = async () => {
       try {
         setLoading(true)
         // Find main client document using uidclient
@@ -109,16 +110,16 @@ export default function FactureDetailPage() {
           console.log('Fetched devis data:', factureDataFromDB)
           
           // Populate form data from database
-          setDevisData({
-            numeroDevis: factureDataFromDB.numeroDevis || '',
+          setFactureData({
+            numeroFacture: factureDataFromDB.numeroFacture || '',
             dateCreation: factureDataFromDB.dateCreation ? 
               (factureDataFromDB.dateCreation.toDate ? factureDataFromDB.dateCreation.toDate().toISOString().split('T')[0] : factureDataFromDB.dateCreation) : '',
-            dateValidite: factureDataFromDB.dateValidite ? 
-              (factureDataFromDB.dateValidite.toDate ? factureDataFromDB.dateValidite.toDate().toISOString().split('T')[0] : factureDataFromDB.dateValidite) : '',
-            validiteDuree: factureDataFromDB.validiteDuree || 60,
+            dateEcheance: factureDataFromDB.dateEcheance ? 
+              (factureDataFromDB.dateEcheance.toDate ? factureDataFromDB.dateEcheance.toDate().toISOString().split('T')[0] : factureDataFromDB.dateEcheance) : '',
+            echeanceDuree: factureDataFromDB.echeanceDuree || 30,
             conditions: factureDataFromDB.conditions || '',
             notes: factureDataFromDB.notes || '',
-            validiteTexte: factureDataFromDB.validiteTexte || '60 jours',
+            echeanceTexte: factureDataFromDB.echeanceTexte || '30 jours',
             conditionsAcceptation: factureDataFromDB.conditionsAcceptation || '',
             champLibre: factureDataFromDB.champLibre || '',
             motifExonerationTVA: factureDataFromDB.motifExonerationTVA || 'aucun'
@@ -188,7 +189,7 @@ export default function FactureDetailPage() {
       }
     }
 
-    fetchDevis()
+    fetchFacture()
   }, [user, params.id, clients])
   
   // Générer le numéro de devis  // Ne plus créer de brouillon automatiquement au chargement
@@ -423,37 +424,37 @@ export default function FactureDetailPage() {
       console.log('✅ Client principal trouvé:', mainClientDoc.id)
       console.log('📄 Données client:', mainClientDoc.data())
       
-      // Generate automatic numero devis
-      let numeroDevis = ''
+      // Generate automatic numero facture
+      let numeroFacture = ''
       try {
-        numeroDevis = await genererProchainNumero(user.uid, 'devis')
-        console.log('✅ Numéro de devis généré automatiquement:', numeroDevis)
+        numeroFacture = await genererProchainNumero(user.uid, 'factures')
+        console.log('✅ Numéro de facture généré automatiquement:', numeroFacture)
       } catch (error) {
         console.error('❌ Erreur lors de la génération du numéro:', error)
         // Continue without numero if generation fails
       }
 
-      // Créer un brouillon avec numéro de devis automatique
+      // Créer un brouillon avec numéro de facture automatique
       const brouillonData = {
         dateCreation: serverTimestamp(),
-        dateValidite: new Date(devisData.dateValidite || new Date()),
-        validiteDuree: devisData.validiteDuree,
-        validiteTexte: devisData.validiteTexte || '',
+        dateEcheance: new Date(factureData.dateEcheance || new Date()),
+        echeanceDuree: factureData.echeanceDuree,
+        echeanceTexte: factureData.echeanceTexte || '',
         clientId: selectedClient?.id || null,
         clientNom: selectedClient ? (selectedClient.typeClient === 'entreprise' ? selectedClient.nomEntreprise : `${selectedClient.nom} ${selectedClient.prenom}`) : '',
         clientEmail: selectedClient?.email || '',
         clientSiret: options.siretClient ? clientSiret : (selectedClient?.siret || ''),
         clientNumeroTVA: options.tvaIntracommunautaire ? clientNumeroTVA : (selectedClient?.numeroTVA || ''),
         clientCodeAPE: selectedClient?.codeAPE || '',
-        numeroDevis: numeroDevis,
+        numeroFacture: numeroFacture,
         lignes: lignes || [],
         montantTotalHT: totalHT || 0,
         montantTotalTVA: totalTVA || 0,
         montantTotalTTC: totalTTC || 0,
         status: 'brouillon',
-        type: 'devis',
-        conditions: devisData.conditions || '',
-        notes: devisData.notes || '',
+        type: 'facture',
+        conditions: factureData.conditions || '',
+        notes: factureData.notes || '',
         options: {
           ...options,
           typeFacturation: options.typeFacturation as 'rapide' | 'complet',
@@ -471,9 +472,9 @@ export default function FactureDetailPage() {
       console.log('👤 Client sélectionné:', selectedClient)
       console.log('🏢 SIRET client:', selectedClient?.siret)
       console.log('💼 TVA client:', selectedClient?.numeroTVA)
-      console.log('🎯 Chemin de la collection:', `clients/${mainClientDoc.id}/devis`)
+      console.log('🎯 Chemin de la collection:', `clients/${mainClientDoc.id}/factures`)
       
-      const devisRef = collection(db, `clients/${mainClientDoc.id}/devis`)
+      const devisRef = collection(db, `clients/${mainClientDoc.id}/factures`)
       console.log('📁 Référence collection créée')
       
       const docRef = await addDoc(devisRef, brouillonData)
@@ -539,10 +540,10 @@ export default function FactureDetailPage() {
     return { valide: true, message: "" }
   }
 
-  // Sauvegarder les modifications du devis
-  const sauvegarderDevis = async () => {
+  // Sauvegarder les modifications de la facture
+  const sauvegarderFacture = async () => {
     if (!user?.uid || !params.id) {
-      toast.error('Utilisateur non connecté ou devis non trouvé')
+      toast.error('Utilisateur non connecté ou facture non trouvée')
       return
     }
 
@@ -560,21 +561,21 @@ export default function FactureDetailPage() {
 
     setIsAutoSaving(true)
     try {
-      console.log('Sauvegarde des modifications du devis:', params.id)
+      console.log('Sauvegarde des modifications de la facture:', params.id)
       
       // Préparer les données en évitant les valeurs undefined
-      const devisDataToSave: any = {
-        dateCreation: devisData.dateCreation ? new Date(devisData.dateCreation) : serverTimestamp(),
-        dateValidite: devisData.dateValidite ? new Date(devisData.dateValidite) : new Date(),
-        validiteDuree: devisData.validiteDuree || 60,
-        validiteTexte: devisData.validiteTexte || '60 jours',
+      const factureDataToSave: any = {
+        dateCreation: factureData.dateCreation ? new Date(factureData.dateCreation) : serverTimestamp(),
+        dateEcheance: factureData.dateEcheance ? new Date(factureData.dateEcheance) : new Date(),
+        echeanceDuree: factureData.echeanceDuree || 30,
+        echeanceTexte: factureData.echeanceTexte || '30 jours',
         clientId: selectedClient?.id || null,
         clientNom: selectedClient ? (selectedClient.typeClient === 'entreprise' ? selectedClient.nomEntreprise : `${selectedClient.nom} ${selectedClient.prenom}`) : '',
         clientEmail: selectedClient?.email || '',
         clientSiret: options.siretClient ? (clientSiret || '') : (selectedClient?.siret || ''),
         clientNumeroTVA: options.tvaIntracommunautaire ? (clientNumeroTVA || '') : (selectedClient?.numeroTVA || ''),
         clientCodeAPE: selectedClient?.codeAPE || '',
-        numeroDevis: devisData.numeroDevis || '',
+        numeroFacture: factureData.numeroFacture || '',
         lignes: lignes.map(ligne => ({
           id: ligne.id || '',
           designation: ligne.designation || '',
@@ -590,11 +591,11 @@ export default function FactureDetailPage() {
         montantTotalHT: totalHT || 0,
         montantTotalTVA: totalTVA || 0,
         montantTotalTTC: totalTTC || 0,
-        conditions: devisData.conditions || '',
-        notes: devisData.notes || '',
-        conditionsAcceptation: devisData.conditionsAcceptation || '',
-        champLibre: devisData.champLibre || '',
-        motifExonerationTVA: devisData.motifExonerationTVA,
+        conditions: factureData.conditions || '',
+        notes: factureData.notes || '',
+        conditionsAcceptation: factureData.conditionsAcceptation || '',
+        champLibre: typeof factureData.champLibre === 'string' ? factureData.champLibre : '',
+        motifExonerationTVA: typeof factureData.motifExonerationTVA === 'string' ? factureData.motifExonerationTVA : 'aucun',
         options: {
           ...options,
           typeFacturation: options.typeFacturation as 'rapide' | 'complet',
@@ -605,23 +606,23 @@ export default function FactureDetailPage() {
 
       // Ajouter les champs optionnels seulement s'ils ne sont pas null/undefined
       if (options.adresseLivraison && adresseLivraison) {
-        devisDataToSave.adresseLivraison = adresseLivraison
+        factureDataToSave.adresseLivraison = adresseLivraison
       }
       
       if (options.intituleDocument && intituleDocument) {
-        devisDataToSave.intituleDocument = intituleDocument
+        factureDataToSave.intituleDocument = intituleDocument
       }
       
       if (options.remiseGlobale && remiseGlobale) {
-        devisDataToSave.remiseGlobale = remiseGlobale
+        factureDataToSave.remiseGlobale = remiseGlobale
       }
       
       // Ajouter modifiePar seulement si user.uid existe
       if (user?.uid) {
-        devisDataToSave.modifiePar = user.uid
+        factureDataToSave.modifiePar = user.uid
       }
 
-      console.log('Données à sauvegarder:', devisDataToSave)
+      console.log('Données à sauvegarder:', factureDataToSave)
 
       // Find main client document
       const clientsRef = collection(db, 'clients')
@@ -629,9 +630,9 @@ export default function FactureDetailPage() {
       
       if (!clientsSnapshot.empty) {
         const mainClientDoc = clientsSnapshot.docs[0]
-        const devisRef = doc(db, `clients/${mainClientDoc.id}/devis`, params.id as string)
-        await updateDoc(devisRef, devisDataToSave)
-        console.log('Devis sauvegardé avec succès')
+        const devisRef = doc(db, `clients/${mainClientDoc.id}/factures`, params.id as string)
+        await updateDoc(devisRef, factureDataToSave)
+        console.log('Facture sauvegardée avec succès')
         toast.success('Modifications sauvegardées avec succès')
       } else {
         console.error('Client principal non trouvé pour la sauvegarde')
@@ -662,12 +663,12 @@ export default function FactureDetailPage() {
     try {
       console.log('Sauvegarde manuelle du brouillon:', brouillonId)
       
-      // Generate numero devis if not already present
-      let numeroDevis = devisData.numeroDevis
-      if (!numeroDevis && user?.uid) {
+      // Generate numeroFacture if not already present
+      let numeroFacture = factureData.numeroFacture
+      if (!numeroFacture && user?.uid) {
         try {
-          numeroDevis = await genererProchainNumero(user.uid, 'devis')
-          console.log('Numéro de devis généré:', numeroDevis)
+          numeroFacture = await genererProchainNumero(user.uid, 'factures')
+          console.log('Numéro de facture généré:', numeroFacture)
         } catch (error) {
           console.error('Erreur lors de la génération du numéro:', error)
           // Continue without numero if generation fails
@@ -675,19 +676,19 @@ export default function FactureDetailPage() {
       }
       
       const brouillonData = {
-        dateCreation: devisData.dateCreation,
-        dateValidite: new Date(devisData.dateValidite),
-        validiteDuree: devisData.validiteDuree,
-        validiteTexte: devisData.validiteTexte,
+        dateCreation: factureData.dateCreation,
+        dateEcheance: new Date(factureData.dateEcheance),
+        echeanceDuree: factureData.echeanceDuree,
+        echeanceTexte: factureData.echeanceTexte,
         clientId: selectedClient?.id || null,
         clientNom: selectedClient ? (selectedClient.typeClient === 'entreprise' ? selectedClient.nomEntreprise : `${selectedClient.nom} ${selectedClient.prenom}`) : '',
         clientEmail: selectedClient?.email || '',
         clientSiret: options.siretClient ? clientSiret : (selectedClient?.siret || ''),
         clientNumeroTVA: options.tvaIntracommunautaire ? clientNumeroTVA : (selectedClient?.numeroTVA || ''),
         clientCodeAPE: selectedClient?.codeAPE || '',
-        numeroDevis: numeroDevis,
+        numeroFacture: numeroFacture,
         status: 'brouillon',
-        type: 'devis',
+        type: 'facture',
         lignes: lignes.map(ligne => ({
           id: ligne.id,
           designation: ligne.designation,
@@ -703,11 +704,11 @@ export default function FactureDetailPage() {
         montantTotalHT: totalHT,
         montantTotalTVA: totalTVA,
         montantTotalTTC: totalTTC,
-        conditions: devisData.conditions,
-        notes: devisData.notes,
-        conditionsAcceptation: devisData.conditionsAcceptation,
-        champLibre: devisData.champLibre || '',
-        motifExonerationTVA: devisData.motifExonerationTVA,
+        conditions: typeof factureData.conditions === 'string' ? factureData.conditions : '',
+        notes: typeof factureData.notes === 'string' ? factureData.notes : '',
+        conditionsAcceptation: factureData.conditionsAcceptation,
+        champLibre: typeof factureData.champLibre === 'string' ? factureData.champLibre : '',
+        motifExonerationTVA: typeof factureData.motifExonerationTVA === 'string' ? factureData.motifExonerationTVA : 'aucun',
         options: {
           ...options,
           typeFacturation: options.typeFacturation as 'rapide' | 'complet',
@@ -731,7 +732,7 @@ export default function FactureDetailPage() {
       
       if (!clientsSnapshot.empty) {
         const mainClientDoc = clientsSnapshot.docs[0]
-        const devisRef = doc(db, `clients/${mainClientDoc.id}/devis`, brouillonId)
+        const devisRef = doc(db, `clients/${mainClientDoc.id}/factures`, brouillonId)
         await updateDoc(devisRef, brouillonData)
         console.log('Brouillon sauvegardé avec succès')
         toast.success('Brouillon sauvegardé avec succès')
@@ -757,7 +758,7 @@ export default function FactureDetailPage() {
       
       if (!clientsSnapshot.empty) {
         const mainClientDoc = clientsSnapshot.docs[0]
-        const devisRef = doc(db, `clients/${mainClientDoc.id}/devis`, brouillonId)
+        const devisRef = doc(db, `clients/${mainClientDoc.id}/factures`, brouillonId)
         await deleteDoc(devisRef)
         setBrouillonId(null)
       }
@@ -793,158 +794,38 @@ export default function FactureDetailPage() {
     console.log('Duplicate devis:', params.id)
   }
 
-  const handleDownloadPDF = async () => {
-    try {
-      // Debug: Afficher les données de remise globale
-      console.log('🔍 Debug remise globale:')
-      console.log('- remiseGlobale state:', remiseGlobale)
-      console.log('- options.remiseGlobale:', options.remiseGlobale)
-      console.log('- sousTotal:', sousTotal)
-      console.log('- remiseHT:', remiseHT)
-      console.log('- totalHT:', totalHT)
-      console.log('- lignes:', lignes)
-      console.log('- calculateTotals():', calculateTotals())
-      
-      // Sauvegarder les modifications avant de télécharger le PDF
-      await sauvegarderDevis()
-      
-      const devisForPDF = {
-        numeroDevis: devisData.numeroDevis || '',
-        dateCreation: devisData.dateCreation || new Date().toISOString(),
-        validiteTexte: devisData.validiteTexte || '30 jours',
-        customCompanyInfo: factureDataFromDB?.customCompanyInfo,
-        intituleDocument: intituleDocument,
-        lignes: [
-          ...lignes.map(ligne => ({
-            designation: ligne.designation,
-            description: ligne.description || '',
-            quantite: ligne.quantite,
-            unite: ligne.unite || '',
-            prixUnitaireHT: ligne.prixUnitaireHT,
-            tauxTVA: ligne.tauxTVA,
-            montantHT: ligne.montantHT,
-            remise: ligne.remise || 0,
-            isDesignationOnly: ligne.isDesignationOnly
-          })),
-          // Ajouter la ligne de remise globale seulement si l'option est cochée
-          ...(options.remiseGlobale ? [{
-            designation: 'Remise globale',
-            description: '',
-            quantite: 1,
-            unite: '%',
-            prixUnitaireHT: remiseGlobale?.pourcentage || 0,
-            tauxTVA: 0,
-            montantHT: -remiseHT,
-            remise: 0,
-            isDesignationOnly: false,
-            isRemiseGlobale: true
-          }] : [])
-        ],
-        montantTotalHT: totalHT,
-        montantTotalTVA: totalTVA,
-        montantTotalTTC: totalTTC,
-        conditions: devisData.conditions,
-        notes: devisData.notes,
-        conditionsAcceptation: factureDataFromDB?.conditionsAcceptation,
-        champLibre: devisData.champLibre || '',
-        motifExonerationTVA: devisData.motifExonerationTVA,
-        options: {
-          ...options,
-          typeFacturation: options.typeFacturation as 'rapide' | 'complet',
-          remiseGlobale: (remiseGlobale && remiseGlobale.montant > 0) || options.remiseGlobale
-        },
-        adresseLivraison: adresseLivraison,
-        remiseGlobale: remiseGlobale,
-        sousTotal: sousTotal,
-        remiseHT: remiseHT
-      }
-
-      const clientForPDF = {
-        typeClient: (selectedClient?.typeClient || 'particulier') as 'particulier' | 'entreprise',
-        nom: selectedClient?.nom,
-        prenom: selectedClient?.prenom,
-        nomEntreprise: selectedClient?.nomEntreprise,
-        adresse: selectedClient?.adresse,
-        complementAdresse: selectedClient?.complementAdresse,
-        codePostal: selectedClient?.codePostal,
-        ville: selectedClient?.ville,
-        pays: 'France',
-        siret: clientSiret,
-        numeroTVA: clientNumeroTVA
-      }
-
-      const companyForPDF = {
-        nom: clientData?.nomEntreprise || clientData?.nom || 'Mon Entreprise',
-        formeJuridique: clientData?.formeJuridique,
-        adresseSiege: {
-          adresse: clientData?.adresseEntreprise || clientData?.adresse || '',
-          codePostal: clientData?.codePostal || '',
-          ville: clientData?.ville || ''
-        },
-        siret: clientData?.siret || '',
-        numeroTVA: clientData?.numeroTVA || '',
-        codeAPE: clientData?.codeAPE || '',
-        logo: clientData?.logoImage
-      }
-
-      await generateDevisPDF(devisForPDF, clientForPDF, companyForPDF)
-      toast.success('PDF téléchargé avec succès')
-    } catch (error) {
-      console.error('Error generating PDF:', error)
-      toast.error('Erreur lors de la génération du PDF')
-    }
-  }
-
   const handlePreviewPDF = async () => {
     try {
-      // Sauvegarder les modifications avant de prévisualiser le PDF
-      await sauvegarderDevis()
+      // Sauvegarder d'abord les modifications
+      await sauvegarderFacture()
       
-      // Generate PDF as blob for preview
+      // Préparer les données pour le PDF (format devis compatible)
       const devisForPDF = {
-        numeroDevis: devisData.numeroDevis || '',
-        dateCreation: devisData.dateCreation || new Date().toISOString(),
-        validiteTexte: devisData.validiteTexte || '30 jours',
-        customCompanyInfo: factureDataFromDB?.customCompanyInfo,
+        numeroDevis: factureData.numeroFacture || '',
+        numeroFacture: factureData.numeroFacture || '',
+        dateCreation: factureData.dateCreation || new Date().toISOString(),
+        validiteTexte: factureData.echeanceTexte || '30 jours',
+        echeanceTexte: factureData.echeanceTexte || '30 jours',
+        customCompanyInfo: typeof factureDataFromDB?.customCompanyInfo === 'string' 
+          ? factureDataFromDB.customCompanyInfo 
+          : '',
         intituleDocument: intituleDocument,
-        lignes: [
-          ...lignes.map(ligne => ({
-            designation: ligne.designation,
-            description: ligne.description,
-            quantite: ligne.quantite,
-            unite: ligne.unite || '',
-            prixUnitaireHT: ligne.prixUnitaireHT,
-            tauxTVA: ligne.tauxTVA,
-            montantHT: ligne.montantHT,
-            remise: ligne.remise,
-            isDesignationOnly: ligne.isDesignationOnly
-          })),
-          // Ajouter la ligne de remise globale seulement si l'option est cochée
-          ...(options.remiseGlobale ? [{
-            designation: 'Remise globale',
-            description: '',
-            quantite: 1,
-            unite: '%',
-            prixUnitaireHT: remiseGlobale?.pourcentage || 0,
-            tauxTVA: 0,
-            montantHT: -remiseHT,
-            remise: 0,
-            isDesignationOnly: false,
-            isRemiseGlobale: true
-          }] : [])
-        ],
+        lignes: lignes.map(ligne => ({
+          ...ligne,
+          unite: ligne.unite || "", // Ensure unite is always a string
+          montantHT: ligne.montantHT || 0
+        })),
         montantTotalHT: totalHT,
         montantTotalTVA: totalTVA,
         montantTotalTTC: totalTTC,
-        conditions: devisData.conditions,
-        notes: devisData.notes,
-        conditionsAcceptation: factureDataFromDB?.conditionsAcceptation,
-        champLibre: devisData.champLibre || '',
-        motifExonerationTVA: devisData.motifExonerationTVA,
+        conditions: typeof factureData.conditions === 'string' ? factureData.conditions : '',
+        notes: typeof factureData.notes === 'string' ? factureData.notes : '',
+        conditionsAcceptation: typeof factureDataFromDB?.conditionsAcceptation === 'string' ? factureDataFromDB.conditionsAcceptation : '',
+        champLibre: typeof factureData.champLibre === 'string' ? factureData.champLibre : '',
+        motifExonerationTVA: typeof factureData.motifExonerationTVA === 'string' ? factureData.motifExonerationTVA : 'aucun',
         options: {
           ...options,
-          typeFacturation: options.typeFacturation as 'rapide' | 'complet',
-          remiseGlobale: (remiseGlobale && remiseGlobale.montant > 0) || options.remiseGlobale
+          typeFacturation: options.typeFacturation as 'rapide' | 'complet'
         },
         adresseLivraison: adresseLivraison,
         remiseGlobale: remiseGlobale,
@@ -981,12 +862,138 @@ export default function FactureDetailPage() {
       }
 
       await previewDevisPDF(devisForPDF, clientForPDF, companyForPDF)
-      
-      toast.success('PDF généré avec succès')
+      toast.success('Aperçu PDF généré avec succès')
     } catch (error) {
-      console.error('Error previewing PDF:', error)
-      toast.error('Erreur lors de la prévisualisation du PDF')
+      console.error('Erreur lors de la prévisualisation PDF:', error)
+      toast.error('Erreur lors de la génération de l\'aperçu PDF')
     }
+  }
+
+  const handleDownloadPDF = async () => {
+    try {
+      // Sauvegarder d'abord les modifications
+      await sauvegarderFacture()
+      
+      // Préparer les données pour le PDF (format devis compatible)
+      const devisForPDF = {
+        numeroDevis: factureData.numeroFacture || '',
+        numeroFacture: factureData.numeroFacture || '',
+        dateCreation: factureData.dateCreation || new Date().toISOString(),
+        validiteTexte: factureData.echeanceTexte || '30 jours',
+        echeanceTexte: factureData.echeanceTexte || '30 jours',
+        customCompanyInfo: typeof factureDataFromDB?.customCompanyInfo === 'string' 
+          ? factureDataFromDB.customCompanyInfo 
+          : '',
+        intituleDocument: intituleDocument,
+        lignes: lignes.map(ligne => ({
+          ...ligne,
+          unite: ligne.unite || "", // Ensure unite is always a string
+          montantHT: ligne.montantHT || 0
+        })),
+        montantTotalHT: totalHT,
+        montantTotalTVA: totalTVA,
+        montantTotalTTC: totalTTC,
+        conditions: typeof factureData.conditions === 'string' ? factureData.conditions : '',
+        notes: typeof factureData.notes === 'string' ? factureData.notes : '',
+        conditionsAcceptation: typeof factureDataFromDB?.conditionsAcceptation === 'string' ? factureDataFromDB.conditionsAcceptation : '',
+        champLibre: typeof factureData.champLibre === 'string' ? factureData.champLibre : '',
+        motifExonerationTVA: typeof factureData.motifExonerationTVA === 'string' ? factureData.motifExonerationTVA : 'aucun',
+        options: {
+          ...options,
+          typeFacturation: options.typeFacturation as 'rapide' | 'complet'
+        },
+        adresseLivraison: adresseLivraison,
+        remiseGlobale: remiseGlobale,
+        sousTotal: sousTotal,
+        remiseHT: remiseHT
+      }
+
+      const clientForPDF = {
+        typeClient: (selectedClient?.typeClient || 'particulier') as 'particulier' | 'entreprise',
+        nom: selectedClient?.nom,
+        prenom: selectedClient?.prenom,
+        nomEntreprise: selectedClient?.nomEntreprise,
+        adresse: selectedClient?.adresse,
+        complementAdresse: selectedClient?.complementAdresse,
+        codePostal: selectedClient?.codePostal,
+        ville: selectedClient?.ville,
+        pays: 'France',
+        siret: clientSiret,
+        numeroTVA: clientNumeroTVA
+      }
+
+      const companyForPDF = {
+        nom: clientData?.nomEntreprise || clientData?.nom || 'Mon Entreprise',
+        formeJuridique: clientData?.formeJuridique,
+        adresseSiege: {
+          adresse: clientData?.adresseEntreprise || clientData?.adresse || '',
+          codePostal: clientData?.codePostal || '',
+          ville: clientData?.ville || ''
+        },
+        siret: clientData?.siret || '',
+        numeroTVA: clientData?.numeroTVA || '',
+        codeAPE: clientData?.codeAPE || '',
+        logo: clientData?.logoImage
+      }
+
+      await generateDevisPDF(devisForPDF, clientForPDF, companyForPDF)
+      toast.success('PDF de la facture téléchargé avec succès !')
+    } catch (error) {
+      console.error('Erreur lors du téléchargement PDF:', error)
+      toast.error('Erreur lors de la génération du PDF')
+    }
+  }
+
+  const creerFactureDefinitive = async () => {
+    try {
+      if (!user || !params.id) {
+        toast.error('Erreur: utilisateur non connecté ou ID manquant')
+        return
+      }
+
+      setIsAutoSaving(true)
+      
+      // D'abord sauvegarder les modifications actuelles
+      await sauvegarderFacture()
+      
+      // Ensuite changer le statut
+      const clientsRef = collection(db, 'clients')
+      const clientsSnapshot = await getDocs(query(clientsRef, where('uidclient', '==', user.uid)))
+      
+      if (!clientsSnapshot.empty) {
+        const mainClientDoc = clientsSnapshot.docs[0]
+        const factureRef = doc(db, `clients/${mainClientDoc.id}/factures`, params.id as string)
+        
+        await updateDoc(factureRef, {
+          statut: 'facturee',
+          dateEnvoi: new Date(),
+          envoyee: true,
+          lastModified: new Date()
+        })
+        
+        console.log('Facture créée avec succès (statut: facturee)')
+        toast.success('Facture créée avec succès ! Statut mis à jour vers "Facturée".')
+        
+        // Recharger les données pour mettre à jour l'interface
+        window.location.reload()
+      } else {
+        toast.error('Erreur lors de la création de la facture')
+      }
+    } catch (error) {
+      console.error('Erreur lors de la création de la facture:', error)
+      toast.error('Erreur lors de la création de la facture')
+    } finally {
+      setIsAutoSaving(false)
+      setShowConfirmFactureDialog(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <PulseLoader />
+      </div>
+    )
   }
 
   const handleDelete = async () => {
@@ -1007,35 +1014,28 @@ export default function FactureDetailPage() {
 
       const mainClientDoc = clientsSnapshot.docs[0]
       
-      // Delete devis from subcollection
-      await deleteDoc(doc(db, `clients/${mainClientDoc.id}/devis`, params.id as string))
+      // Delete facture from subcollection
+      await deleteDoc(doc(db, `clients/${mainClientDoc.id}/factures`, params.id as string))
       
-      console.log('Devis deleted successfully')
-      toast.success('Devis supprimé avec succès')
-      router.push('/dashboard/devis')
+      console.log('Facture deleted successfully')
+      toast.success('Facture supprimée avec succès')
+      router.push('/dashboard/factures')
     } catch (error) {
-      console.error('Error deleting devis:', error)
-      toast.error('Erreur lors de la suppression du devis')
+      console.error('Error deleting facture:', error)
+      toast.error('Erreur lors de la suppression de la facture')
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <PulseLoader />
-      </div>
-    )
-  }
-
   return (
+
     <div className="min-h-screen bg-gray-100">
       {/* Delete confirmation dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Supprimer le devis</AlertDialogTitle>
+            <AlertDialogTitle>Supprimer la facture</AlertDialogTitle>
             <AlertDialogDescription>
-              Êtes-vous sûr de vouloir supprimer ce devis ? Cette action est irréversible.
+              Êtes-vous sûr de vouloir supprimer cette facture ? Cette action est irréversible.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1057,7 +1057,7 @@ export default function FactureDetailPage() {
           <Button variant="ghost" className="cursor-pointer" size="sm" onClick={() => router.back()}>
             <ArrowLeft className="w-4 h-4" />
           </Button>
-          <h1 className="text-lg font-medium text-gray-700">Devis {devisData.numeroDevis}</h1>
+          <h1 className="text-lg font-medium text-gray-700">Facture {factureData.numeroFacture}</h1>
         </div>
         
         {/* Right: Action buttons */}
@@ -1306,9 +1306,9 @@ export default function FactureDetailPage() {
             {/* Devis Details */}
             <div className="grid grid-cols-3 gap-4 mt-2">
               <div>
-                <Label className="text-xs font-medium text-gray-700">N° de devis</Label>
+                <Label className="text-xs font-medium text-gray-700">N° de facture</Label>
                 <Input 
-                  value={devisData.numeroDevis || 'Non généré'}
+                  value={factureData.numeroFacture || 'Non généré'}
                   readOnly 
                   className="mt-1 h-8 text-sm bg-gray-50 text-gray-500" 
                 />
@@ -1317,17 +1317,17 @@ export default function FactureDetailPage() {
                 <Label className="text-xs font-medium text-gray-700">Date d'émission</Label>
                 <Input 
                   type="date" 
-                  value={devisData.dateCreation}
-                  onChange={(e) => setDevisData(prev => ({ ...prev, dateCreation: e.target.value }))}
+                  value={factureData.dateCreation}
+                  onChange={(e) => setFactureData(prev => ({ ...prev, dateCreation: e.target.value }))}
                   className="mt-1 h-8 text-sm"
                 />
               </div>
               <div>
-                <Label className="text-xs font-medium text-gray-700">Période de validité</Label>
+                <Label className="text-xs font-medium text-gray-700">Échéance</Label>
                 <div className="flex items-center mt-1">
                   <Input 
-                    value={devisData.validiteTexte}
-                    onChange={(e) => setDevisData(prev => ({ ...prev, validiteTexte: e.target.value }))}
+                    value={factureData.echeanceTexte}
+                    onChange={(e) => setFactureData(prev => ({ ...prev, echeanceTexte: e.target.value }))}
                     className="h-8 text-sm flex-1"
                     placeholder="60 jours"
                   />
@@ -1748,26 +1748,26 @@ export default function FactureDetailPage() {
               )}
 
               <div className="relative inline-flex items-center border border-green-200 rounded-md hover:border-green-300 bg-white">
-                <div 
-                  onClick={addLigne}
-                  className="flex items-center px-3 py-2 text-green-600 hover:text-green-700 hover:bg-green-50 cursor-pointer rounded-l-md text-xs"
-                >
-                  <Plus className="w-3 h-3 mr-1" />
-                  Ligne simple
-                </div>
-                <div className="w-px bg-green-300 h-6"></div>
-                <div className="relative">
-                  <Select value="" onValueChange={(value) => {
-                    if (value === 'prestation') {
-                      addLignePrestation()
-                    } else if (value === 'designation') {
-                      addLigneDesignation()
-                    } else if (value === 'prestations-list') {
-                      setIsPrestationsListOpen(true)
-                    } else if (value === 'create-prestation') {
-                      setIsPrestationDrawerOpen(true)
-                    }
-                  }}>
+                  <div 
+                    onClick={addLigne}
+                    className="flex items-center px-3 py-2 text-green-600 hover:text-green-700 hover:bg-green-50 cursor-pointer rounded-l-md text-xs"
+                  >
+                    <Plus className="w-3 h-3 mr-1" />
+                    Ligne simple
+                  </div>
+                  <div className="w-px bg-green-300 h-6"></div>
+                  <div className="relative">
+                    <Select value="" onValueChange={(value) => {
+                      if (value === 'prestation') {
+                        addLignePrestation()
+                      } else if (value === 'designation') {
+                        addLigneDesignation()
+                      } else if (value === 'prestations-list') {
+                        setIsPrestationsListOpen(true)
+                      } else if (value === 'create-prestation') {
+                        setIsPrestationDrawerOpen(true)
+                      }
+                    }}>
                     <SelectTrigger className="w-8 h-8 p-0 border-0 rounded-r-md hover:bg-green-50 focus:ring-0 opacity-0 absolute inset-0">
                       <SelectValue />
                     </SelectTrigger>
@@ -1786,11 +1786,11 @@ export default function FactureDetailPage() {
                       </SelectItem>
                     </SelectContent>
                   </Select>
-                  <div className="w-8 h-8 rounded-r-md hover:bg-green-50 flex items-center justify-center pointer-events-none">
-                    <ChevronDown className="w-3 h-3 text-green-600" />
+                    <div className="w-8 h-8 rounded-r-md hover:bg-green-50 flex items-center justify-center pointer-events-none">
+                      <ChevronDown className="w-3 h-3 text-green-600" />
+                    </div>
                   </div>
                 </div>
-              </div>
             </div>
 
             {/* Totals */}
@@ -1838,9 +1838,9 @@ export default function FactureDetailPage() {
               <div className="border-t border-gray-200 pt-4 space-y-3">
                 <div className="space-y-2">
                   <Label className="text-xs font-medium text-gray-700">Motif d'exonération de TVA</Label>
-                  <Select value={devisData.motifExonerationTVA} onValueChange={async (value) => {
+                  <Select value={factureData.motifExonerationTVA} onValueChange={async (value) => {
                     // Mettre à jour le state local
-                    setDevisData(prev => ({ ...prev, motifExonerationTVA: value }))
+                    setFactureData(prev => ({ ...prev, motifExonerationTVA: value }))
                     console.log('💾 Motif exonération TVA mis à jour:', value)
                     
                     // Sauvegarder immédiatement dans Firebase
@@ -1860,7 +1860,7 @@ export default function FactureDetailPage() {
                         const mainClientDoc = mainClientsSnapshot.docs[0]
                         const mainClientId = mainClientDoc.id
                         
-                        const devisRef = doc(db, `clients/${mainClientId}/devis`, params.id as string)
+                        const devisRef = doc(db, `clients/${mainClientId}/factures`, params.id as string)
                         
                         // Préparer les données à sauvegarder en évitant les valeurs undefined
                         const updateData: any = {
@@ -1892,7 +1892,7 @@ export default function FactureDetailPage() {
                   </Select>
                 </div>
                 <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
-                  {getMotifExonerationText(devisData.motifExonerationTVA)}
+                  {getMotifExonerationText(factureData.motifExonerationTVA)}
                 </div>
               </div>
             )}
@@ -1905,15 +1905,15 @@ export default function FactureDetailPage() {
               devisId={params.id as string}
               devisConditionsAcceptation={factureDataFromDB?.conditionsAcceptation}
               devisCustomCompanyInfo={factureDataFromDB?.customCompanyInfo}
-              devisFreeFieldContent={devisData.champLibre}
+              devisFreeFieldContent={factureData.champLibre}
               customConditionsText={factureDataFromDB?.conditionsAcceptation}
               onConditionsChange={(newConditions) => {
-                // Sauvegarder directement dans Firebase dans clients/{idclient}/devis/{iddevis}/conditionsAcceptation
-                console.log('💾 Sauvegarde conditions dans devis:', newConditions)
+                // Sauvegarder directement dans Firebase dans clients/{idclient}/factures/{idfacture}/conditionsAcceptation
+                console.log('💾 Sauvegarde conditions dans facture:', newConditions)
               }}
               onFreeFieldChange={async (newFreeField) => {
                 // Mettre à jour le state local
-                setDevisData(prev => ({ ...prev, champLibre: newFreeField }))
+                setFactureData(prev => ({ ...prev, champLibre: newFreeField }))
                 console.log('💾 Champ libre mis à jour:', newFreeField)
                 
                 // Sauvegarder immédiatement dans Firebase
@@ -1933,7 +1933,7 @@ export default function FactureDetailPage() {
                     const mainClientDoc = mainClientsSnapshot.docs[0]
                     const mainClientId = mainClientDoc.id
                     
-                    const devisRef = doc(db, `clients/${mainClientId}/devis`, params.id as string)
+                    const devisRef = doc(db, `clients/${mainClientId}/factures`, params.id as string)
                     
                     // Préparer les données à sauvegarder en évitant les valeurs undefined
                     const updateData: any = {
@@ -2131,18 +2131,52 @@ export default function FactureDetailPage() {
         }}
       />
 
-      {/* Fixed Bottom Button */}
-      <div className="fixed bottom-0 left-0 right-0 bg-transparent p-4 flex justify-center z-30">
+      {/* Fixed Bottom Buttons */}
+      <div className="fixed bottom-0 left-0 right-0 bg-transparent p-4 flex justify-center gap-4 z-30">
         <Button 
           className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 cursor-pointer shadow-lg"
-          onClick={sauvegarderDevis}
+          onClick={sauvegarderFacture}
           size="lg"
           disabled={isAutoSaving}
         >
           <FileText className="w-4 h-4 mr-2" />
           {isAutoSaving ? 'Sauvegarde...' : 'Sauvegarder les modifications'}
         </Button>
+        {/* Bouton Créer la facture - seulement si statut = brouillon */}
+        {factureDataFromDB?.statut === 'brouillon' && (
+          <Button 
+            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 cursor-pointer shadow-lg"
+            onClick={() => setShowConfirmFactureDialog(true)}
+            size="lg"
+          >
+            <Receipt className="w-4 h-4 mr-2" />
+            Créer la facture
+          </Button>
+        )}
       </div>
+
+      {/* Modale de confirmation pour créer la facture */}
+      <AlertDialog open={showConfirmFactureDialog} onOpenChange={setShowConfirmFactureDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Créer la facture définitive</AlertDialogTitle>
+            <AlertDialogDescription>
+              Êtes-vous sûr de vouloir créer cette facture ? Le statut passera de "brouillon" à "facturée".
+              <br /><br />
+              <strong>Vous pourrez toujours modifier la facture après sa création.</strong>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={creerFactureDefinitive}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              Créer la facture
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </div>
   )
