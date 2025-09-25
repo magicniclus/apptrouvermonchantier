@@ -14,7 +14,7 @@ export interface Facture {
   dateCreation: any
   dateEcheance: any
   dateReglement?: any
-  statut: 'brouillon' | 'envoyee' | 'payee' | 'en_retard' | 'annulee'
+  statut: 'brouillon' | 'facturee' | 'payee' | 'en_retard' | 'annulee'
   montantHT: number
   montantTTC: number
   tauxTVA: number
@@ -59,23 +59,33 @@ export function useFactures() {
   const { user, clientData } = useAuth()
 
   const loadFactures = async () => {
-    if (!user || !clientData?.id) {
-      console.log('❌ useFactures: Pas d\'utilisateur ou de client data')
+    if (!user?.uid) {
+      console.log('❌ useFactures: Pas d\'utilisateur connecté')
       setLoading(false)
       return
     }
 
     try {
-      console.log('🔄 useFactures: Chargement des factures pour client:', clientData.id)
+      console.log('🔄 useFactures: Chargement des factures pour utilisateur:', user.uid)
       
-      // Requête pour récupérer toutes les factures du client
-      const facturesRef = collection(db, 'factures')
-      const q = query(
-        facturesRef, 
-        where('clientPrincipalId', '==', clientData.id)
-      )
+      // Trouver le client principal
+      const clientsRef = collection(db, 'clients')
+      const clientsSnapshot = await getDocs(query(clientsRef, where('uidclient', '==', user.uid)))
       
-      const querySnapshot = await getDocs(q)
+      if (clientsSnapshot.empty) {
+        console.log('❌ useFactures: Aucun client principal trouvé')
+        setFactures([])
+        setLoading(false)
+        return
+      }
+
+      const mainClientDoc = clientsSnapshot.docs[0]
+      const mainClientId = mainClientDoc.id
+      console.log('✅ useFactures: Client principal trouvé:', mainClientId)
+      
+      // Récupérer les factures de la sous-collection
+      const facturesRef = collection(db, `clients/${mainClientId}/factures`)
+      const querySnapshot = await getDocs(facturesRef)
       console.log('📊 useFactures: Nombre de factures trouvées:', querySnapshot.size)
       
       const facturesList: Facture[] = []
@@ -106,16 +116,25 @@ export function useFactures() {
 
   useEffect(() => {
     loadFactures()
-  }, [user, clientData])
+  }, [user])
 
   const createFacture = async (factureData: Omit<Facture, 'id'>) => {
-    if (!clientData?.id) return null
+    if (!user?.uid) return null
 
     try {
-      const facturesRef = collection(db, 'factures')
+      // Trouver le client principal
+      const clientsRef = collection(db, 'clients')
+      const clientsSnapshot = await getDocs(query(clientsRef, where('uidclient', '==', user.uid)))
+      
+      if (clientsSnapshot.empty) {
+        throw new Error('Client principal non trouvé')
+      }
+
+      const mainClientId = clientsSnapshot.docs[0].id
+      const facturesRef = collection(db, `clients/${mainClientId}/factures`)
+      
       const docRef = await addDoc(facturesRef, {
         ...factureData,
-        clientPrincipalId: clientData.id,
         dateCreation: new Date(),
         historique: [{
           date: new Date(),
@@ -134,8 +153,20 @@ export function useFactures() {
   }
 
   const updateFacture = async (factureId: string, updates: Partial<Facture>) => {
+    if (!user?.uid) return
+
     try {
-      const factureRef = doc(db, 'factures', factureId)
+      // Trouver le client principal
+      const clientsRef = collection(db, 'clients')
+      const clientsSnapshot = await getDocs(query(clientsRef, where('uidclient', '==', user.uid)))
+      
+      if (clientsSnapshot.empty) {
+        throw new Error('Client principal non trouvé')
+      }
+
+      const mainClientId = clientsSnapshot.docs[0].id
+      const factureRef = doc(db, `clients/${mainClientId}/factures`, factureId)
+      
       await updateDoc(factureRef, {
         ...updates,
         dateModification: new Date()
@@ -149,8 +180,20 @@ export function useFactures() {
   }
 
   const deleteFacture = async (factureId: string) => {
+    if (!user?.uid) return
+
     try {
-      const factureRef = doc(db, 'factures', factureId)
+      // Trouver le client principal
+      const clientsRef = collection(db, 'clients')
+      const clientsSnapshot = await getDocs(query(clientsRef, where('uidclient', '==', user.uid)))
+      
+      if (clientsSnapshot.empty) {
+        throw new Error('Client principal non trouvé')
+      }
+
+      const mainClientId = clientsSnapshot.docs[0].id
+      const factureRef = doc(db, `clients/${mainClientId}/factures`, factureId)
+      
       await deleteDoc(factureRef)
       
       await loadFactures() // Recharger la liste
