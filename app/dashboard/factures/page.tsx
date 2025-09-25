@@ -79,8 +79,8 @@ export default function FacturesPage() {
     switch (status) {
       case 'brouillon':
         return <Badge variant="secondary">Brouillon</Badge>
-      case 'envoyee':
-        return <Badge variant="outline">Envoyée</Badge>
+      case 'facturee':
+        return <Badge variant="outline">Facturée</Badge>
       case 'payee':
         return <Badge variant="default" className="bg-green-600">Payée</Badge>
       case 'en_retard':
@@ -189,7 +189,7 @@ export default function FacturesPage() {
                 >
                   <option value="all">Tous les statuts</option>
                   <option value="brouillon">Brouillon</option>
-                  <option value="envoyee">Envoyée</option>
+                  <option value="facturee">Facturée</option>
                   <option value="payee">Payée</option>
                   <option value="en_retard">En retard</option>
                   <option value="annulee">Annulée</option>
@@ -266,7 +266,7 @@ export default function FacturesPage() {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => {/* TODO: View facture details */}}
+                                  onClick={() => router.push(`/dashboard/factures/${factureItem.id}`)}
                                   className="flex items-center gap-2"
                                 >
                                   <Eye className="w-4 h-4" />
@@ -275,7 +275,7 @@ export default function FacturesPage() {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => {/* TODO: Edit facture */}}
+                                  onClick={() => router.push(`/dashboard/factures/${factureItem.id}`)}
                                   className="flex items-center gap-2"
                                 >
                                   <Edit className="w-4 h-4" />
