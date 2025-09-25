@@ -598,7 +598,7 @@ factures/{factureId}
 ├── dateCreation: timestamp
 ├── dateEcheance: timestamp
 ├── dateReglement: timestamp|null
-├── statut: string ("brouillon", "envoyee", "payee", "en_retard", "annulee")
+├── statut: string ("brouillon", "facturee", "payee", "en_retard", "annulee")
 ├── montantHT: number
 ├── montantTTC: number
 ├── tauxTVA: number (ex: 20)
