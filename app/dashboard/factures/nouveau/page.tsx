@@ -292,6 +292,19 @@ export default function NouvelleFacturePage() {
     }
   }
 
+  // Handle client selection
+  const handleClientSelect = (client: Client) => {
+    setSelectedClient(client)
+    setClientSearch(`${client.nom} ${client.prenom}`)
+    setShowClientDropdown(false)
+  }
+
+  // Handle create client
+  const handleCreateClient = () => {
+    setShowClientDropdown(false)
+    setIsClientDrawerOpen(true)
+  }
+
   // Créer un brouillon de facture
   const creerBrouillon = async () => {
     if (!selectedClient || !user?.uid) {
@@ -318,27 +331,66 @@ export default function NouvelleFacturePage() {
       // Récupérer les states locaux du DevisFooter
       const localStates = getLocalStatesRef.current?.() || { localConditionsAcceptation: '', localCustomCompanyInfo: '' }
       
-      // Créer un brouillon avec numéro de facture automatique
+      // Créer un brouillon avec structure conforme à la référence Firebase + compatibilité devis
       const brouillonData = {
+        // === CHAMPS OBLIGATOIRES RÉFÉRENCE FIREBASE ===
+        numeroFacture: numeroFacture,
+        clientId: selectedClient?.id || null,
         dateCreation: serverTimestamp(),
         dateEcheance: new Date(factureData.dateEcheance || new Date()),
-        echeanceDuree: factureData.echeanceDuree,
-        echeanceTexte: factureData.echeanceTexte || '',
-        clientId: selectedClient?.id || null,
+        dateReglement: null,
+        statut: 'brouillon', // Conforme à la référence (pas "status")
+        montantHT: totalHT || 0, // Conforme à la référence (pas "montantTotalHT")
+        montantTTC: totalTTC || 0, // Conforme à la référence (pas "montantTotalTTC")
+        montantTVA: totalTVA || 0, // Conforme à la référence (pas "montantTotalTVA")
+        tauxTVA: lignes.length > 0 ? lignes[0].tauxTVA : 20, // Taux principal
+        devise: 'EUR',
+        conditions: {
+          delaiPaiement: factureData.echeanceDuree || 30,
+          penalitesRetard: 3,
+          escompte: 0
+        },
+        adresseFacturation: {
+          nom: selectedClient ? (selectedClient.typeClient === 'entreprise' ? selectedClient.nomEntreprise : `${selectedClient.nom} ${selectedClient.prenom}`) : '',
+          adresse: selectedClient?.adresse || '',
+          codePostal: selectedClient?.codePostal || '',
+          ville: selectedClient?.ville || '',
+          pays: 'France'
+        },
+        lignes: lignes.map(ligne => ({
+          articleId: null,
+          designation: ligne.designation,
+          quantite: ligne.quantite,
+          prixUnitaireHT: ligne.prixUnitaireHT,
+          remise: ligne.remise || 0,
+          montantHT: ligne.montantHT,
+          tauxTVA: ligne.tauxTVA,
+          // Champs supplémentaires pour compatibilité devis
+          id: ligne.id,
+          unite: ligne.unite,
+          typePrestation: ligne.typePrestation,
+          isDesignationOnly: ligne.isDesignationOnly
+        })),
+        notes: factureData.notes || '',
+        fichierPDF: null,
+        envoyee: false,
+        dateEnvoi: null,
+        historique: [{
+          date: new Date(),
+          action: 'creation_brouillon',
+          utilisateur: user.uid,
+          details: 'Création du brouillon de facture'
+        }],
+        
+        // === CHAMPS SUPPLÉMENTAIRES POUR COMPATIBILITÉ DEVIS ===
+        type: 'facture',
         clientNom: selectedClient ? (selectedClient.typeClient === 'entreprise' ? selectedClient.nomEntreprise : `${selectedClient.nom} ${selectedClient.prenom}`) : '',
         clientEmail: selectedClient?.email || '',
         clientSiret: options.siretClient ? clientSiret : (selectedClient?.siret || ''),
         clientNumeroTVA: options.tvaIntracommunautaire ? clientNumeroTVA : (selectedClient?.numeroTVA || ''),
         clientCodeAPE: selectedClient?.codeAPE || '',
-        numeroFacture: numeroFacture,
-        lignes: lignes || [],
-        montantTotalHT: totalHT || 0,
-        montantTotalTVA: totalTVA || 0,
-        montantTotalTTC: totalTTC || 0,
-        status: 'brouillon',
-        type: 'facture',
-        conditions: factureData.conditions || '',
-        notes: factureData.notes || '',
+        echeanceDuree: factureData.echeanceDuree,
+        echeanceTexte: factureData.echeanceTexte || '',
         conditionsAcceptation: localStates.localConditionsAcceptation || factureData.conditionsAcceptation || 'Facture payable dans les 30 jours suivant la date d\'émission.',
         champLibre: factureData.champLibre || '',
         motifExonerationTVA: motifExonerationTVA || 'aucun',
@@ -424,6 +476,47 @@ export default function NouvelleFacturePage() {
                     {clientData?.codePostal || '33100'} {clientData?.ville || 'BORDEAUX FR'}
                   </div>
                 </div>
+
+                {/* Delivery Address Section - Conditional */}
+                {options.adresseLivraison && (
+                  <div className="mt-6">
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">Adresse de livraison</h4>
+                    <div className="space-y-2 max-w-xs">
+                      <Input
+                        placeholder="Adresse"
+                        value={adresseLivraison.adresse}
+                        onChange={(e) => setAdresseLivraison(prev => ({ ...prev, adresse: e.target.value }))}
+                        className="h-7 text-xs"
+                      />
+                      <Input
+                        placeholder="Complément d'adresse"
+                        value={adresseLivraison.complementAdresse}
+                        onChange={(e) => setAdresseLivraison(prev => ({ ...prev, complementAdresse: e.target.value }))}
+                        className="h-7 text-xs"
+                      />
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Code postal"
+                          value={adresseLivraison.codePostal}
+                          onChange={(e) => setAdresseLivraison(prev => ({ ...prev, codePostal: e.target.value }))}
+                          className="h-7 text-xs w-20"
+                        />
+                        <Input
+                          placeholder="Ville"
+                          value={adresseLivraison.ville}
+                          onChange={(e) => setAdresseLivraison(prev => ({ ...prev, ville: e.target.value }))}
+                          className="h-7 text-xs flex-1"
+                        />
+                      </div>
+                      <Input
+                        placeholder="Pays"
+                        value={adresseLivraison.pays}
+                        onChange={(e) => setAdresseLivraison(prev => ({ ...prev, pays: e.target.value }))}
+                        className="h-7 text-xs"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
               
               {/* Client Info Section - Top Right */}
@@ -449,36 +542,110 @@ export default function NouvelleFacturePage() {
                     onFocus={() => setShowClientDropdown(true)}
                     className={`h-8 text-sm pr-8 ${!clientSearch ? 'bg-blue-50' : ''}`}
                   />
-                  {showClientDropdown && filteredClients.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 bg-white border border-gray-200 rounded-md shadow-lg z-50 max-h-60 overflow-y-auto">
-                      {filteredClients.map((client) => (
-                        <div
-                          key={client.id}
-                          className="p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
-                          onClick={() => {
-                            setSelectedClient(client)
-                            setClientSearch(`${client.nom} ${client.prenom}`)
-                            setShowClientDropdown(false)
-                          }}
-                        >
-                          <div className="font-medium text-sm">
-                            {client.typeClient === 'entreprise' ? client.nomEntreprise : `${client.nom} ${client.prenom}`}
+                  {(clientSearch || selectedClient) && (
+                    <button
+                      onClick={() => {
+                        setClientSearch('')
+                        setSelectedClient(null)
+                        setShowClientDropdown(false)
+                      }}
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                  {showClientDropdown && (
+                    <div className="absolute top-full left-0 right-0 z-10 mt-1 max-h-60 overflow-y-auto bg-white border rounded-md shadow-lg">
+                      <div className="p-2">
+                        {filteredClients.length > 0 ? (
+                          <div className="space-y-1">
+                            {filteredClients.map((client) => (
+                              <div
+                                key={client.id}
+                                className="p-2 hover:bg-gray-100 cursor-pointer rounded"
+                                onClick={() => handleClientSelect(client)}
+                              >
+                                <div className="font-medium text-sm">
+                                  {client.typeClient === 'entreprise' ? client.nomEntreprise : `${client.nom} ${client.prenom}`}
+                                </div>
+                                <div className="text-xs text-gray-500">{client.email}</div>
+                              </div>
+                            ))}
                           </div>
-                          <div className="text-xs text-gray-500">{client.email}</div>
-                        </div>
-                      ))}
-                      <div
-                        className="p-3 hover:bg-gray-50 cursor-pointer border-t bg-blue-50 text-blue-600"
-                        onClick={() => setIsClientDrawerOpen(true)}
-                      >
-                        <div className="flex items-center gap-2 text-sm">
-                          <Plus className="w-4 h-4" />
-                          Créer un nouveau client
-                        </div>
+                        ) : (
+                          <div className="p-2 text-sm">Aucun client trouvé</div>
+                        )}
+                        <Separator className="my-2" />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full justify-start text-green-600"
+                          onClick={handleCreateClient}
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Ajouter un client
+                        </Button>
                       </div>
                     </div>
                   )}
                 </div>
+                <Input
+                  placeholder="Adresse"
+                  value={selectedClient?.adresse || ''}
+                  onChange={() => {}} // Controlled by selectedClient
+                  readOnly={!!selectedClient}
+                  className="h-8 text-sm"
+                />
+                <Input
+                  placeholder="Complément d'adresse"
+                  value={selectedClient?.complementAdresse || ''}
+                  onChange={() => {}} // Controlled by selectedClient
+                  readOnly={!!selectedClient}
+                  className="h-8 text-sm"
+                />
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Code postal"
+                    value={selectedClient?.codePostal || ''}
+                    onChange={() => {}} // Controlled by selectedClient
+                    readOnly={!!selectedClient}
+                    className="h-8 text-sm flex-1"
+                  />
+                  <Input
+                    placeholder="Ville"
+                    value={selectedClient?.ville || ''}
+                    onChange={() => {}} // Controlled by selectedClient
+                    readOnly={!!selectedClient}
+                    className="h-8 text-sm flex-2"
+                  />
+                </div>
+
+                {/* SIREN/SIRET Field - Conditional */}
+                {options.siretClient && (
+                  <div className="mt-3">
+                    <Label className="text-xs font-medium text-gray-700">SIRET</Label>
+                    <Input
+                      value={clientSiret}
+                      onChange={(e) => setClientSiret(e.target.value)}
+                      placeholder="12345678901234"
+                      className="h-8 text-sm mt-1"
+                    />
+                  </div>
+                )}
+
+                {/* TVA Intracommunautaire Field - Conditional */}
+                {options.tvaIntracommunautaire && (
+                  <div className="mt-3">
+                    <Label className="text-xs font-medium text-gray-700">TVA intracommunautaire</Label>
+                    <Input
+                      value={clientNumeroTVA}
+                      onChange={(e) => setClientNumeroTVA(e.target.value)}
+                      placeholder="FR12345678901"
+                      className="h-8 text-sm mt-1"
+                    />
+                  </div>
+                )}
+
               </div>
             </div>
 
@@ -501,8 +668,333 @@ export default function NouvelleFacturePage() {
               </div>
             </div>
 
+            {/* Tableau selon le type de facturation */}
+            {options.typeFacturation === 'rapide' ? (
+              <div className="relative">
+                <div className="border rounded-lg overflow-visible">
+                  <table className="w-full">
+                    <thead className="bg-blue-50">
+                      <tr>
+                        <th className="text-left p-2 font-medium text-gray-700 text-xs border-r border-gray-200">Désignation</th>
+                        <th className="text-center p-2 font-medium text-gray-700 w-16 text-xs border-r border-gray-200">TVA</th>
+                        <th className="text-center p-2 font-medium text-gray-700 w-20 text-xs">Montant HT</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lignes.map((ligne, index) => (
+                        <tr key={ligne.id} className={`border-t ${ligne.isDesignationOnly ? 'bg-gray-50' : ''} group hover:bg-gray-50 relative`}>
+                        {ligne.isDesignationOnly ? (
+                          <td className="p-2 relative" colSpan={3}>
+                            <Input
+                              placeholder="Description / Titre de section"
+                              value={ligne.designation}
+                              onChange={(e) => updateLigne(ligne.id, 'designation', e.target.value)}
+                              className="border-0 shadow-none p-0 h-auto focus-visible:ring-0 text-xs font-medium text-gray-700 bg-transparent"
+                            />
+                            {lignes.length > 1 && (
+                              <button
+                                onClick={() => removeLigne(ligne.id)}
+                                className="absolute -right-6 top-1/2 -translate-y-1/2 h-6 w-6 p-0 bg-white border border-gray-200 shadow-sm hover:bg-red-50 hover:border-red-200 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20"
+                              >
+                                <Trash2 className="w-3 h-3 text-gray-500 hover:text-red-500" />
+                              </button>
+                            )}
+                          </td>
+                        ) : (
+                          <>
+                            <td className="p-2 border-r border-gray-200">
+                              <Input
+                                placeholder="Désignation"
+                                value={ligne.designation}
+                                onChange={(e) => updateLigne(ligne.id, 'designation', e.target.value)}
+                                className="border-0 shadow-none p-0 h-auto focus-visible:ring-0 text-xs"
+                              />
+                            </td>
+                            <td className="p-2 border-r border-gray-200">
+                              <Select key={`tva-${ligne.id}`} value={ligne.tauxTVA.toString()} onValueChange={(value) => updateLigne(ligne.id, 'tauxTVA', parseFloat(value))}>
+                                <SelectTrigger className="w-16 h-6 text-xs border-0 shadow-none p-1">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="0">0 %</SelectItem>
+                                  <SelectItem value="2.1">2,1 %</SelectItem>
+                                  <SelectItem value="5.5">5,5 %</SelectItem>
+                                  <SelectItem value="8.5">8,5 %</SelectItem>
+                                  <SelectItem value="10">10 %</SelectItem>
+                                  <SelectItem value="20">20 %</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </td>
+                            <td className="p-2 relative">
+                              <Input
+                                type="text"
+                                inputMode="decimal"
+                                value={ligne.prixUnitaireHT === 0 ? '' : ligne.prixUnitaireHT.toString()}
+                                onChange={(e) => {
+                                  const value = e.target.value
+                                  if (/^[0-9.,]*$/.test(value)) {
+                                    const numValue = value === '' ? 0 : parseFloat(value.replace(',', '.')) || 0
+                                    updateLigne(ligne.id, 'prixUnitaireHT', numValue)
+                                  }
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                                    e.preventDefault()
+                                  }
+                                }}
+                                className="border-0 shadow-none p-0 h-auto focus-visible:ring-0 text-right text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              />
+                              <div className="absolute -right-6 top-1/2 -translate-y-1/2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20">
+                                <button
+                                  onClick={() => {
+                                    setEditingLineId(ligne.id)
+                                    setIsPrestationsListOpen(true)
+                                  }}
+                                  className="h-6 w-6 p-0 bg-white border border-gray-200 shadow-sm hover:bg-blue-50 hover:border-blue-200 rounded flex items-center justify-center"
+                                >
+                                  <MoreHorizontal className="w-3 h-3 text-gray-500" />
+                                </button>
+                                {lignes.length > 1 && (
+                                  <button
+                                    onClick={() => removeLigne(ligne.id)}
+                                    className="h-6 w-6 p-0 bg-white border border-gray-200 shadow-sm hover:bg-red-50 hover:border-red-200 rounded flex items-center justify-center"
+                                  >
+                                    <Trash2 className="w-3 h-3 text-gray-500 hover:text-red-500" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </>
+                        )}
+                        </tr>
+                      ))}
+                      
+                      {/* Global discount line for rapide mode */}
+                      {options.remiseGlobale && (
+                        <tr className="border-t-2 border-gray-300 bg-blue-50">
+                          <td className="p-2 border-r border-gray-200 font-medium text-sm">
+                            Remise globale
+                          </td>
+                          <td className="p-2 border-r border-gray-200 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <Input
+                                type="text"
+                                inputMode="decimal"
+                                value={remiseGlobale.pourcentage === 0 ? '' : remiseGlobale.pourcentage.toString()}
+                                onChange={(e) => {
+                                  const value = e.target.value
+                                  if (/^[0-9.,]*$/.test(value)) {
+                                    const numValue = value === '' ? 0 : parseFloat(value.replace(',', '.')) || 0
+                                    if (numValue <= 100) {
+                                      setRemiseGlobale(prev => ({
+                                        ...prev,
+                                        pourcentage: numValue
+                                      }))
+                                    }
+                                  }
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                                    e.preventDefault()
+                                  }
+                                }}
+                                className="w-12 h-6 text-xs text-center border-0 shadow-none p-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                placeholder="0"
+                              />
+                              <span className="text-xs text-gray-500">%</span>
+                            </div>
+                          </td>
+                          <td className="p-2 text-center text-sm font-medium">
+                            -{remiseHT.toFixed(2)} €
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              // Mode complet - tableau avec toutes les colonnes
+              <div className="relative">
+                <div className="border rounded-lg overflow-visible">
+                  <table className="w-full">
+                    <thead className="bg-blue-50">
+                      <tr>
+                        <th className="text-left p-2 font-medium text-gray-700 text-xs border-r border-gray-200">Désignation</th>
+                        <th className="text-center p-2 font-medium text-gray-700 w-16 text-xs border-r border-gray-200">Quantité</th>
+                        <th className="text-center p-2 font-medium text-gray-700 w-16 text-xs border-r border-gray-200">Unité</th>
+                        <th className="text-center p-2 font-medium text-gray-700 w-20 text-xs border-r border-gray-200">Prix unitaire</th>
+                        <th className="text-center p-2 font-medium text-gray-700 w-16 text-xs border-r border-gray-200">TVA</th>
+                        <th className="text-center p-2 font-medium text-gray-700 w-20 text-xs">Montant HT</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lignes.map((ligne, index) => (
+                        <tr key={ligne.id} className={`border-t ${ligne.isDesignationOnly ? 'bg-gray-50' : ''} group hover:bg-gray-50 relative`}>
+                        {ligne.isDesignationOnly ? (
+                          <td className="p-2 border-r border-gray-200 relative" colSpan={6}>
+                            <Input
+                              placeholder="Description / Titre de section"
+                              value={ligne.designation}
+                              onChange={(e) => updateLigne(ligne.id, 'designation', e.target.value)}
+                              className="border-0 shadow-none p-0 h-auto focus-visible:ring-0 text-xs font-medium text-gray-700 bg-transparent"
+                            />
+                            {lignes.length > 1 && (
+                              <button
+                                onClick={() => removeLigne(ligne.id)}
+                                className="absolute -right-6 top-1/2 -translate-y-1/2 h-6 w-6 p-0 bg-white border border-gray-200 shadow-sm hover:bg-red-50 hover:border-red-200 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20"
+                              >
+                                <Trash2 className="w-3 h-3 text-gray-500 hover:text-red-500" />
+                              </button>
+                            )}
+                          </td>
+                        ) : (
+                          <>
+                            <td className="p-2 border-r border-gray-200">
+                              <div className="flex gap-2 items-center">
+                                <Select key={`prestation-${ligne.id}`} value={ligne.typePrestation || 'Presta'} onValueChange={(value) => updateLigne(ligne.id, 'typePrestation', value)}>
+                                  <SelectTrigger className="w-20 h-6 text-xs border-0 shadow-none p-1">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="Presta">Presta</SelectItem>
+                                    <SelectItem value="Biens">Biens</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <Input
+                                  placeholder="Désignation"
+                                  value={ligne.designation}
+                                  onChange={(e) => updateLigne(ligne.id, 'designation', e.target.value)}
+                                  className="border-0 shadow-none p-0 h-auto focus-visible:ring-0 text-xs flex-1"
+                                />
+                              </div>
+                            </td>
+                            <td className="p-2 border-r border-gray-200">
+                              <Input
+                                type="number"
+                                value={ligne.quantite}
+                                onChange={(e) => updateLigne(ligne.id, 'quantite', parseFloat(e.target.value) || 0)}
+                                className="border-0 shadow-none p-0 h-auto focus-visible:ring-0 text-center text-xs w-16"
+                              />
+                            </td>
+                            <td className="p-2 border-r border-gray-200">
+                              <Input
+                                placeholder="unité"
+                                value={ligne.unite || ''}
+                                onChange={(e) => updateLigne(ligne.id, 'unite', e.target.value)}
+                                className="border-0 shadow-none p-0 h-auto focus-visible:ring-0 text-center text-xs w-16"
+                              />
+                            </td>
+                            <td className="p-2 border-r border-gray-200">
+                              <Input
+                                type="text"
+                                inputMode="decimal"
+                                value={ligne.prixUnitaireHT === 0 ? '' : ligne.prixUnitaireHT.toString()}
+                                onChange={(e) => {
+                                  const value = e.target.value
+                                  if (/^[0-9.,]*$/.test(value)) {
+                                    const numValue = value === '' ? 0 : parseFloat(value.replace(',', '.')) || 0
+                                    updateLigne(ligne.id, 'prixUnitaireHT', numValue)
+                                  }
+                                }}
+                                className="border-0 shadow-none p-0 h-auto focus-visible:ring-0 text-center text-xs"
+                              />
+                            </td>
+                            <td className="p-2 border-r border-gray-200">
+                              <Select key={`tva-${ligne.id}`} value={ligne.tauxTVA.toString()} onValueChange={(value) => updateLigne(ligne.id, 'tauxTVA', parseFloat(value))}>
+                                <SelectTrigger className="w-16 h-6 text-xs border-0 shadow-none p-1">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="0">0 %</SelectItem>
+                                  <SelectItem value="2.1">2,1 %</SelectItem>
+                                  <SelectItem value="5.5">5,5 %</SelectItem>
+                                  <SelectItem value="8.5">8,5 %</SelectItem>
+                                  <SelectItem value="10">10 %</SelectItem>
+                                  <SelectItem value="20">20 %</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </td>
+                            <td className="p-2 relative">
+                              <div className="text-right text-xs font-medium">
+                                {ligne.montantHT.toFixed(2)} €
+                              </div>
+                              <div className="absolute -right-6 top-1/2 -translate-y-1/2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20">
+                                <button
+                                  onClick={() => {
+                                    setEditingLineId(ligne.id)
+                                    setIsPrestationsListOpen(true)
+                                  }}
+                                  className="h-6 w-6 p-0 bg-white border border-gray-200 shadow-sm hover:bg-blue-50 hover:border-blue-200 rounded flex items-center justify-center"
+                                >
+                                  <MoreHorizontal className="w-3 h-3 text-gray-500" />
+                                </button>
+                                {lignes.length > 1 && (
+                                  <button
+                                    onClick={() => removeLigne(ligne.id)}
+                                    className="h-6 w-6 p-0 bg-white border border-gray-200 shadow-sm hover:bg-red-50 hover:border-red-200 rounded flex items-center justify-center"
+                                  >
+                                    <Trash2 className="w-3 h-3 text-gray-500 hover:text-red-500" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </>
+                        )}
+                        </tr>
+                      ))}
+                      
+                      {/* Global discount line for complet mode */}
+                      {options.remiseGlobale && (
+                        <tr className="border-t-2 border-gray-300 bg-blue-50">
+                          <td className="p-2 border-r border-gray-200 font-medium text-sm">
+                            Remise globale
+                          </td>
+                          <td className="p-2 border-r border-gray-200"></td>
+                          <td className="p-2 border-r border-gray-200"></td>
+                          <td className="p-2 border-r border-gray-200 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <Input
+                                type="text"
+                                inputMode="decimal"
+                                value={remiseGlobale.pourcentage === 0 ? '' : remiseGlobale.pourcentage.toString()}
+                                onChange={(e) => {
+                                  const value = e.target.value
+                                  if (/^[0-9.,]*$/.test(value)) {
+                                    const numValue = value === '' ? 0 : parseFloat(value.replace(',', '.')) || 0
+                                    if (numValue <= 100) {
+                                      setRemiseGlobale(prev => ({
+                                        ...prev,
+                                        pourcentage: numValue
+                                      }))
+                                    }
+                                  }
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                                    e.preventDefault()
+                                  }
+                                }}
+                                className="w-12 h-6 text-xs text-center border-0 shadow-none p-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                placeholder="0"
+                              />
+                              <span className="text-xs text-gray-500">%</span>
+                            </div>
+                          </td>
+                          <td className="p-2 border-r border-gray-200"></td>
+                          <td className="p-2 text-center text-sm font-medium">
+                            -{remiseHT.toFixed(2)} €
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
             {/* Add Line Buttons */}
-            <div className="flex justify-center mb-4">
+            <div className="flex justify-start mb-4">
               <div className="relative inline-flex items-center border border-green-200 rounded-md hover:border-green-300 bg-white">
                 <div 
                   onClick={addLigne}
@@ -554,25 +1046,25 @@ export default function NouvelleFacturePage() {
               {options.remiseGlobale && remiseHT > 0 ? (
                 <>
                   <div className="flex justify-between text-xs">
-                    <span className="text-gray-600">Sous-total HT</span>
+                    <span className="text-gray-600">{anyTVAZero ? 'Sous-total' : 'Sous-total HT'}</span>
                     <span className="font-medium">{sousTotal.toFixed(2)} €</span>
                   </div>
                   <div className="flex justify-between text-xs">
-                    <span className="text-gray-600">Remise HT</span>
+                    <span className="text-gray-600">{anyTVAZero ? 'Remise' : 'Remise HT'}</span>
                     <span className="font-medium">-{remiseHT.toFixed(2)} €</span>
                   </div>
-                  <div className={`flex justify-between ${totalTVA > 0 ? 'text-xs' : 'text-lg font-bold text-blue-600'}`}>
-                    <span className={totalTVA > 0 ? 'text-gray-600' : ''}>Total HT</span>
-                    <span className={totalTVA > 0 ? 'font-medium' : ''}>{totalHT.toFixed(2)} €</span>
+                  <div className={`flex justify-between ${anyTVAZero ? 'text-lg font-bold text-blue-600' : 'text-xs'}`}>
+                    <span className={anyTVAZero ? '' : 'text-gray-600'}>{anyTVAZero ? 'Total' : 'Total HT'}</span>
+                    <span className={anyTVAZero ? '' : 'font-medium'}>{totalHT.toFixed(2)} €</span>
                   </div>
                 </>
               ) : (
-                <div className={`flex justify-between ${totalTVA > 0 ? 'text-xs' : 'text-lg font-bold text-blue-600'}`}>
-                  <span className={totalTVA > 0 ? 'text-gray-600' : ''}>Total HT</span>
-                  <span className={totalTVA > 0 ? 'font-medium' : ''}>{totalHT.toFixed(2)} €</span>
+                <div className={`flex justify-between ${anyTVAZero ? 'text-lg font-bold text-blue-600' : 'text-xs'}`}>
+                  <span className={anyTVAZero ? '' : 'text-gray-600'}>{anyTVAZero ? 'Total' : 'Total HT'}</span>
+                  <span className={anyTVAZero ? '' : 'font-medium'}>{totalHT.toFixed(2)} €</span>
                 </div>
               )}
-              {totalTVA > 0 && (
+              {!anyTVAZero && (
                 <>
                   <div className="flex justify-between text-xs">
                     <span className="text-gray-600">TVA</span>
@@ -698,6 +1190,49 @@ export default function NouvelleFacturePage() {
                     className="w-3 h-3" 
                   />
                   <Label htmlFor="tvaIntra" className="text-xs">N° de TVA intracommunautaire</Label>
+                </div>
+              </div>
+            </div>
+
+            {/* Info complémentaires */}
+            <div className="space-y-2">
+              <Label className="text-xs font-medium text-blue-600">Info complémentaires</Label>
+              <div className="space-y-1">
+                <div className="flex items-center space-x-2">
+                  <Checkbox 
+                    id="conditionsAcceptation" 
+                    checked={options.conditionsAcceptation} 
+                    onCheckedChange={(checked) => setOptions(prev => ({ ...prev, conditionsAcceptation: checked as boolean }))}
+                    className="w-3 h-3" 
+                  />
+                  <Label htmlFor="conditionsAcceptation" className="text-xs">Conditions d'acceptation</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox 
+                    id="intituleDocument" 
+                    checked={options.intituleDocument}
+                    onCheckedChange={(checked) => setOptions(prev => ({ ...prev, intituleDocument: checked as boolean }))}
+                    className="w-3 h-3" 
+                  />
+                  <Label htmlFor="intituleDocument" className="text-xs">Intitulé du document</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox 
+                    id="champLibre" 
+                    checked={options.champLibre}
+                    onCheckedChange={(checked) => setOptions(prev => ({ ...prev, champLibre: checked as boolean }))}
+                    className="w-3 h-3" 
+                  />
+                  <Label htmlFor="champLibre" className="text-xs">Champ libre</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox 
+                    id="remiseGlobale" 
+                    checked={options.remiseGlobale}
+                    onCheckedChange={(checked) => setOptions(prev => ({ ...prev, remiseGlobale: checked as boolean }))}
+                    className="w-3 h-3" 
+                  />
+                  <Label htmlFor="remiseGlobale" className="text-xs">Remise globale</Label>
                 </div>
               </div>
             </div>
