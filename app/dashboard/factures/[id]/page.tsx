@@ -107,7 +107,7 @@ export default function FactureDetailPage() {
         if (factureDoc.exists()) {
           const factureDataFromDB = factureDoc.data()
           setFactureDataFromDB(factureDataFromDB)
-          console.log('Fetched devis data:', factureDataFromDB)
+          console.log('Fetched facture data:', factureDataFromDB)
           
           // Populate form data from database
           setFactureData({
@@ -180,10 +180,10 @@ export default function FactureDetailPage() {
           }
           
         } else {
-          console.error('Devis not found:', params.id)
+          console.error('Facture not found:', params.id)
         }
       } catch (error) {
-        console.error('Error fetching devis:', error)
+        console.error('Error fetching facture:', error)
       } finally {
         setLoading(false)
       }
@@ -192,7 +192,7 @@ export default function FactureDetailPage() {
     fetchFacture()
   }, [user, params.id, clients])
   
-  // Générer le numéro de devis  // Ne plus créer de brouillon automatiquement au chargement
+  // Générer le numéro de facture  // Ne plus créer de brouillon automatiquement au chargement
   // Le brouillon sera créé uniquement lors de l'enregistrement
   
   // Line items
@@ -500,7 +500,7 @@ export default function FactureDetailPage() {
     if (!selectedClient) {
       return {
         valide: false,
-        message: "Vous devez sélectionner un client pour enregistrer le devis."
+        message: "🔍 Veuillez sélectionner un client avant de sauvegarder votre facture."
       }
     }
     
@@ -511,7 +511,7 @@ export default function FactureDetailPage() {
     if (lignesNonDesignation.length === 0) {
       return {
         valide: false,
-        message: "Aucune prestation ou produit n'a été ajouté. Veuillez ajouter au moins un élément à votre devis."
+        message: "📋 Votre facture est vide ! Ajoutez au moins une prestation ou un produit pour pouvoir la sauvegarder."
       }
     }
     
@@ -520,19 +520,19 @@ export default function FactureDetailPage() {
       if (!ligne.designation.trim()) {
         return {
           valide: false,
-          message: "Une ou plusieurs lignes sont incomplètes. Veuillez remplir la désignation de toutes les prestations et produits."
+          message: "✏️ Certaines prestations n'ont pas de description ! Veuillez remplir la désignation de toutes vos lignes."
         }
       }
       if (ligne.quantite <= 0) {
         return {
           valide: false,
-          message: "Une ou plusieurs lignes sont incomplètes. La quantité doit être supérieure à 0 pour toutes les prestations et produits."
+          message: "🔢 Attention aux quantités ! Toutes vos prestations doivent avoir une quantité supérieure à 0."
         }
       }
       if (ligne.prixUnitaireHT < 0) {
         return {
           valide: false,
-          message: "Une ou plusieurs lignes sont incomplètes. Le prix unitaire ne peut pas être négatif."
+          message: "💰 Prix incorrect ! Le prix unitaire ne peut pas être négatif."
         }
       }
     }
@@ -775,23 +775,23 @@ export default function FactureDetailPage() {
   // Confirmer la fermeture et conserver le brouillon
   const confirmerFermeture = () => {
     setShowExitModal(false)
-    router.push('/dashboard/devis')
+    router.push('/dashboard/factures')
   }
 
   // Confirmer la fermeture et supprimer le brouillon
   const confirmerSuppressionEtFermeture = async () => {
     await supprimerBrouillon()
     setShowExitModal(false)
-    router.push('/dashboard/devis')
+    router.push('/dashboard/factures')
   }
 
   const handleEdit = () => {
-    router.push(`/dashboard/devis/${params.id}/modifier`)
+    router.push(`/dashboard/factures/${params.id}/modifier`)
   }
 
   const handleDuplicate = () => {
     // TODO: Implement duplicate functionality
-    console.log('Duplicate devis:', params.id)
+        console.log('Duplicate facture:', params.id)
   }
 
   const handlePreviewPDF = async () => {
@@ -1298,7 +1298,7 @@ export default function FactureDetailPage() {
                   value={intituleDocument}
                   onChange={(e) => setIntituleDocument(e.target.value)}
                   className="text-start text-lg font-bold border-0 bg-transparent focus:bg-white focus:border focus:border-blue-200 px-2 py-1"
-                  placeholder="Intitulé du devis"
+                  placeholder="Intitulé de la facture"
                 />
               </div>
             )}
