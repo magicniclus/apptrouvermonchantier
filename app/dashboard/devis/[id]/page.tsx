@@ -332,11 +332,11 @@ export default function DevisDetailPage() {
       id: `ligne-${Date.now()}`,
       designation: '',
       quantite: 1,
-      unite: '',
+      unite: 'unité',
       prixUnitaireHT: 0,
       remise: 0,
       montantHT: 0,
-      tauxTVA: 0,
+      tauxTVA: 20,
       typePrestation: 'Presta',
       isDesignationOnly: false
     }
@@ -364,7 +364,7 @@ export default function DevisDetailPage() {
       id: `designation-${Date.now()}`,
       designation: '',
       quantite: 0,
-      unite: '',
+      unite: 'unité',
       prixUnitaireHT: 0,
       remise: 0,
       montantHT: 0,
@@ -642,6 +642,172 @@ export default function DevisDetailPage() {
       toast.error('Erreur lors de la sauvegarde des modifications')
     } finally {
       setIsAutoSaving(false)
+    }
+  }
+
+  // Passer le devis en facture
+  const passerEnFacture = async () => {
+    if (!user?.uid || !params.id) {
+      toast.error('Utilisateur non connecté ou devis non trouvé')
+      return
+    }
+
+    // Valider les données avant conversion
+    const validation = validerDonnees()
+    if (!validation.valide) {
+      toast.error(validation.message, {
+        style: {
+          color: '#dc2626',
+          fontWeight: 'bold'
+        }
+      })
+      return
+    }
+
+    try {
+      console.log('🔄 Conversion du devis en facture:', params.id)
+      
+      // D'abord sauvegarder le devis
+      await sauvegarderDevis()
+      
+      // Générer un numéro de facture
+      const numeroFacture = await genererProchainNumero(user.uid, 'factures')
+      
+      // Préparer les données de la facture basées sur le devis
+      const factureData: any = {
+        // === CHAMPS OBLIGATOIRES RÉFÉRENCE FIREBASE ===
+        numeroFacture: numeroFacture,
+        clientId: selectedClient?.id || null,
+        dateCreation: new Date(),
+        dateEcheance: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 jours par défaut
+        statut: 'brouillon',
+        montantHT: totalHT || 0,
+        montantTTC: totalTTC || 0,
+        montantTVA: totalTVA || 0,
+        tauxTVA: lignes.length > 0 ? lignes[0].tauxTVA : 20,
+        devise: 'EUR',
+        conditions: {
+          delaiPaiement: 30,
+          penalitesRetard: 3,
+          escompte: 0
+        },
+        adresseFacturation: {
+          nom: selectedClient ? (selectedClient.typeClient === 'entreprise' ? selectedClient.nomEntreprise : `${selectedClient.nom} ${selectedClient.prenom}`) : '',
+          adresse: selectedClient?.adresse || '',
+          codePostal: selectedClient?.codePostal || '',
+          ville: selectedClient?.ville || '',
+          pays: 'France'
+        },
+        lignes: lignes.map(ligne => ({
+          designation: ligne.designation,
+          quantite: ligne.quantite,
+          unite: ligne.unite,
+          prixUnitaireHT: ligne.prixUnitaireHT,
+          remise: ligne.remise || 0,
+          montantHT: ligne.montantHT,
+          tauxTVA: ligne.tauxTVA,
+          // Champs supplémentaires pour compatibilité devis
+          id: ligne.id,
+          typePrestation: ligne.typePrestation,
+          isDesignationOnly: ligne.isDesignationOnly
+        })),
+        notes: devisData.notes || '',
+        envoyee: false,
+        dateEnvoi: null,
+        historique: [{
+          date: new Date(),
+          action: 'creation_depuis_devis',
+          utilisateur: user.uid,
+          details: `Facture créée depuis le devis ${devisData.numeroDevis || params.id}`
+        }],
+        
+        // === CHAMPS SUPPLÉMENTAIRES POUR COMPATIBILITÉ DEVIS ===
+        type: 'facture',
+        clientNom: selectedClient ? (selectedClient.typeClient === 'entreprise' ? (selectedClient.nomEntreprise || '') : `${selectedClient.nom || ''} ${selectedClient.prenom || ''}`.trim()) : '',
+        clientEmail: selectedClient?.email || '',
+        clientSiret: options.siretClient ? (clientSiret || '') : (selectedClient?.siret || ''),
+        clientNumeroTVA: options.tvaIntracommunautaire ? (clientNumeroTVA || '') : (selectedClient?.numeroTVA || ''),
+        clientCodeAPE: selectedClient?.codeAPE || '',
+        echeanceDuree: 30,
+        echeanceTexte: '30 jours',
+        conditionsAcceptation: devisData.conditionsAcceptation || 'Facture payable dans les 30 jours suivant la date d\'émission.',
+        champLibre: devisData.champLibre || '',
+        motifExonerationTVA: devisData.motifExonerationTVA || 'aucun',
+        customCompanyInfo: devisDataFromDB?.customCompanyInfo || '',
+        options: options,
+        adresseLivraison: options.adresseLivraison ? adresseLivraison : null,
+        intituleDocument: options.intituleDocument ? intituleDocument : null,
+        remiseGlobale: options.remiseGlobale ? remiseGlobale : null,
+        uidclient: user.uid,
+        mainClientId: '',
+        lastModified: serverTimestamp(),
+        
+        // === TRAÇABILITÉ ORIGINE DEVIS ===
+        originDevis: {
+          devisId: params.id as string,
+          numeroDevis: devisData.numeroDevis || '',
+          dateConversion: new Date(),
+          convertPar: user.uid
+        }
+      }
+
+      console.log('📝 Données de la facture à créer:', factureData)
+
+      // Nettoyer les valeurs undefined
+      const cleanObject = (obj: any): any => {
+        if (obj === null || obj === undefined) return null
+        if (typeof obj !== 'object' || Array.isArray(obj)) return obj
+        
+        // Gérer les objets Firebase spéciaux (serverTimestamp, etc.)
+        if (obj.constructor && obj.constructor.name !== 'Object') return obj
+        
+        const cleaned: { [key: string]: any } = {}
+        for (const [key, value] of Object.entries(obj)) {
+          if (value !== undefined) {
+            if (value === null) {
+              cleaned[key] = null
+            } else if (Array.isArray(value)) {
+              cleaned[key] = value.filter(item => item !== undefined)
+            } else if (typeof value === 'object' && value.constructor && value.constructor.name === 'Object') {
+              cleaned[key] = cleanObject(value)
+            } else {
+              cleaned[key] = value
+            }
+          }
+        }
+        return cleaned
+      }
+
+      const cleanedFactureData = cleanObject(factureData)
+      
+      // Find main client document
+      const clientsRef = collection(db, 'clients')
+      const clientsSnapshot = await getDocs(query(clientsRef, where('uidclient', '==', user.uid)))
+      
+      if (!clientsSnapshot.empty) {
+        const mainClientDoc = clientsSnapshot.docs[0]
+        cleanedFactureData.mainClientId = mainClientDoc.id
+        
+        const facturesRef = collection(db, `clients/${mainClientDoc.id}/factures`)
+        const docRef = await addDoc(facturesRef, cleanedFactureData)
+        
+        console.log('🎉 SUCCÈS! Facture créée avec ID:', docRef.id)
+        toast.success(`Facture ${numeroFacture} créée avec succès depuis le devis !`, {
+          style: {
+            color: '#16a34a',
+            fontWeight: 'bold'
+          }
+        })
+        
+        // Rediriger vers la nouvelle facture
+        router.push(`/dashboard/factures/${docRef.id}`)
+      } else {
+        console.error('Client principal non trouvé')
+        toast.error('Erreur lors de la création de la facture')
+      }
+    } catch (error) {
+      console.error('Erreur lors de la conversion en facture:', error)
+      toast.error('Erreur lors de la création de la facture')
     }
   }
 
@@ -1805,15 +1971,15 @@ export default function DevisDetailPage() {
                     <span className="text-gray-600">{totalTVA > 0 ? 'Remise HT' : 'Remise'}</span>
                     <span className="font-medium">-{remiseHT.toFixed(2)} €</span>
                   </div>
-                  <div className={`flex justify-between ${anyTVAZero ? 'text-lg font-bold text-blue-600' : 'text-xs'}`}>
-                    <span className={anyTVAZero ? '' : 'text-gray-600'}>{totalTVA > 0 ? 'Total HT' : 'Total'}</span>
-                    <span className={anyTVAZero ? '' : 'font-medium'}>{totalHT.toFixed(2)} €</span>
+                  <div className={`flex justify-between ${anyTVAZero && totalTVA === 0 ? 'text-lg font-bold text-blue-600' : 'text-xs'}`}>
+                    <span className={anyTVAZero && totalTVA === 0 ? '' : 'text-gray-600'}>{totalTVA > 0 ? 'Total HT' : 'Total'}</span>
+                    <span className={anyTVAZero && totalTVA === 0 ? '' : 'font-medium'}>{totalHT.toFixed(2)} €</span>
                   </div>
                 </>
               ) : (
-                <div className={`flex justify-between ${anyTVAZero ? 'text-lg font-bold text-blue-600' : 'text-xs'}`}>
-                  <span className={anyTVAZero ? '' : 'text-gray-600'}>{totalTVA > 0 ? 'Total HT' : 'Total'}</span>
-                  <span className={anyTVAZero ? '' : 'font-medium'}>{totalHT.toFixed(2)} €</span>
+                <div className={`flex justify-between ${anyTVAZero && totalTVA === 0 ? 'text-lg font-bold text-blue-600' : 'text-xs'}`}>
+                  <span className={anyTVAZero && totalTVA === 0 ? '' : 'text-gray-600'}>{totalTVA > 0 ? 'Total HT' : 'Total'}</span>
+                  <span className={anyTVAZero && totalTVA === 0 ? '' : 'font-medium'}>{totalHT.toFixed(2)} €</span>
                 </div>
               )}
               {totalTVA > 0 && (
@@ -2131,8 +2297,8 @@ export default function DevisDetailPage() {
         }}
       />
 
-      {/* Fixed Bottom Button */}
-      <div className="fixed bottom-0 left-0 right-0 bg-transparent p-4 flex justify-center z-30">
+      {/* Fixed Bottom Buttons */}
+      <div className="fixed bottom-0 left-0 right-0 bg-transparent p-4 flex justify-center gap-4 z-30">
         <Button 
           className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 cursor-pointer shadow-lg"
           onClick={sauvegarderDevis}
@@ -2141,6 +2307,16 @@ export default function DevisDetailPage() {
         >
           <FileText className="w-4 h-4 mr-2" />
           {isAutoSaving ? 'Sauvegarde...' : 'Sauvegarder les modifications'}
+        </Button>
+        
+        <Button 
+          className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 cursor-pointer shadow-lg"
+          onClick={passerEnFacture}
+          size="lg"
+          disabled={isAutoSaving || !selectedClient}
+        >
+          <ArrowRight className="w-4 h-4 mr-2" />
+          Passer en facture
         </Button>
       </div>
 
