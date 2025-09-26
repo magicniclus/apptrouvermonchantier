@@ -333,11 +333,11 @@ export default function FactureDetailPage() {
       id: `ligne-${Date.now()}`,
       designation: '',
       quantite: 1,
-      unite: '',
+      unite: 'unité',
       prixUnitaireHT: 0,
       remise: 0,
       montantHT: 0,
-      tauxTVA: 0,
+      tauxTVA: 20,
       typePrestation: 'Presta',
       isDesignationOnly: false
     }
@@ -365,7 +365,7 @@ export default function FactureDetailPage() {
       id: `designation-${Date.now()}`,
       designation: '',
       quantite: 0,
-      unite: '',
+      unite: 'unité',
       prixUnitaireHT: 0,
       remise: 0,
       montantHT: 0,
