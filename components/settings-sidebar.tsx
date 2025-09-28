@@ -1,6 +1,6 @@
 "use client"
 
-import { User, Shield, Building2, ArrowLeft, LogOut } from "lucide-react"
+import { User, Shield, Building2, ArrowLeft, LogOut, Calculator } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -54,6 +54,12 @@ export function SettingsSidebar({ activeTab, onTabChange }: SettingsSidebarProps
       title: 'Accès et droits',
       icon: Shield,
       isActive: activeTab === 'access',
+    },
+    {
+      id: 'compta',
+      title: 'Comptabilité',
+      icon: Calculator,
+      isActive: activeTab === 'compta',
     }
   ]
 
