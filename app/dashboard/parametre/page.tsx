@@ -25,7 +25,7 @@ import { toast } from 'sonner'
 import { 
   User, Shield, Building2, Lock, Mail, Phone, MapPin, 
   Users, Plus, Trash2, Camera, Upload, Calendar,
-  Eye, EyeOff, Loader
+  Eye, EyeOff, Loader, Download, FileSpreadsheet, FileText
 } from 'lucide-react'
 import { db, storage, auth } from '@/lib/firebase'
 import { 
@@ -557,6 +557,189 @@ export default function ParametrePage() {
       router.push('/')
     }
   }, [user, clientData, router, authLoading])
+
+  // === FONCTIONS D'EXPORT COMPTABILITÉ ===
+  
+  const exportToCSV = (data: any[], filename: string, headers: string[]) => {
+    const csvContent = [
+      headers.join(';'), // En-têtes
+      ...data.map(row => headers.map(header => {
+        const value = row[header] || ''
+        // Échapper les guillemets et entourer de guillemets si nécessaire
+        return typeof value === 'string' && (value.includes(';') || value.includes('"') || value.includes('\n'))
+          ? `"${value.replace(/"/g, '""')}"`
+          : value
+      }).join(';'))
+    ].join('\n')
+    
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' }) // BOM pour Excel
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = `${filename}_${new Date().toISOString().split('T')[0]}.csv`
+    link.click()
+  }
+
+  const exportClients = async () => {
+    if (!user?.uid) {
+      toast.error('Utilisateur non connecté')
+      return
+    }
+    
+    try {
+      setLoading(true)
+      console.log('🔄 Export des clients...')
+      
+      const clientsRef = collection(db, 'clients')
+      const clientsSnapshot = await getDocs(query(clientsRef, where('uidclient', '==', user.uid)))
+      
+      if (!clientsSnapshot.empty) {
+        const mainClientDoc = clientsSnapshot.docs[0]
+        const clientsSubRef = collection(db, `clients/${mainClientDoc.id}/clients`)
+        const clientsSubSnapshot = await getDocs(clientsSubRef)
+        
+        const clientsData = clientsSubSnapshot.docs.map(doc => {
+          const data = doc.data()
+          return {
+            'ID': doc.id,
+            'Type': data.typeClient === 'entreprise' ? 'Entreprise' : 'Particulier',
+            'Nom': data.typeClient === 'entreprise' ? data.nomEntreprise : `${data.nom} ${data.prenom}`,
+            'Email': data.email || '',
+            'Téléphone': data.telephone || '',
+            'Adresse': data.adresse || '',
+            'Code Postal': data.codePostal || '',
+            'Ville': data.ville || '',
+            'SIRET': data.siret || '',
+            'N° TVA': data.numeroTVA || '',
+            'Code APE': data.codeAPE || '',
+            'Statut': data.status || 'actif',
+            'Date Création': data.dateCreation ? new Date(data.dateCreation.toDate()).toLocaleDateString('fr-FR') : '',
+            'Commentaires': data.commentaires || ''
+          }
+        })
+        
+        const headers = ['ID', 'Type', 'Nom', 'Email', 'Téléphone', 'Adresse', 'Code Postal', 'Ville', 'SIRET', 'N° TVA', 'Code APE', 'Statut', 'Date Création', 'Commentaires']
+        exportToCSV(clientsData, 'clients', headers)
+        
+        toast.success(`${clientsData.length} clients exportés avec succès`)
+      } else {
+        toast.error('Aucun client trouvé')
+      }
+    } catch (error) {
+      console.error('Erreur export clients:', error)
+      toast.error('Erreur lors de l\'export des clients')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const exportDevis = async () => {
+    if (!user?.uid) {
+      toast.error('Utilisateur non connecté')
+      return
+    }
+    
+    try {
+      setLoading(true)
+      console.log('🔄 Export des devis...')
+      
+      const clientsRef = collection(db, 'clients')
+      const clientsSnapshot = await getDocs(query(clientsRef, where('uidclient', '==', user.uid)))
+      
+      if (!clientsSnapshot.empty) {
+        const mainClientDoc = clientsSnapshot.docs[0]
+        const devisRef = collection(db, `clients/${mainClientDoc.id}/devis`)
+        const devisSnapshot = await getDocs(devisRef)
+        
+        const devisData = devisSnapshot.docs.map(doc => {
+          const data = doc.data()
+          return {
+            'N° Devis': data.numeroDevis || doc.id,
+            'Client': data.clientNom || '',
+            'Email Client': data.clientEmail || '',
+            'Date Création': data.dateCreation ? new Date(data.dateCreation.toDate()).toLocaleDateString('fr-FR') : '',
+            'Date Validité': data.dateValidite ? new Date(data.dateValidite.toDate()).toLocaleDateString('fr-FR') : '',
+            'Statut': data.status || 'brouillon',
+            'Montant HT': data.montantTotalHT ? `${data.montantTotalHT.toFixed(2)} €` : '0,00 €',
+            'Montant TVA': data.montantTotalTVA ? `${data.montantTotalTVA.toFixed(2)} €` : '0,00 €',
+            'Montant TTC': data.montantTotalTTC ? `${data.montantTotalTTC.toFixed(2)} €` : '0,00 €',
+            'Conditions': data.conditions || '',
+            'Notes': data.notes || '',
+            'SIRET Client': data.clientSiret || '',
+            'N° TVA Client': data.clientNumeroTVA || '',
+            'Nb Lignes': data.lignes ? data.lignes.length : 0,
+            'Date Modification': data.lastModified ? new Date(data.lastModified.toDate()).toLocaleDateString('fr-FR') : ''
+          }
+        })
+        
+        const headers = ['N° Devis', 'Client', 'Email Client', 'Date Création', 'Date Validité', 'Statut', 'Montant HT', 'Montant TVA', 'Montant TTC', 'Conditions', 'Notes', 'SIRET Client', 'N° TVA Client', 'Nb Lignes', 'Date Modification']
+        exportToCSV(devisData, 'devis', headers)
+        
+        toast.success(`${devisData.length} devis exportés avec succès`)
+      } else {
+        toast.error('Aucun devis trouvé')
+      }
+    } catch (error) {
+      console.error('Erreur export devis:', error)
+      toast.error('Erreur lors de l\'export des devis')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const exportFactures = async () => {
+    if (!user?.uid) {
+      toast.error('Utilisateur non connecté')
+      return
+    }
+    
+    try {
+      setLoading(true)
+      console.log('🔄 Export des factures...')
+      
+      const clientsRef = collection(db, 'clients')
+      const clientsSnapshot = await getDocs(query(clientsRef, where('uidclient', '==', user.uid)))
+      
+      if (!clientsSnapshot.empty) {
+        const mainClientDoc = clientsSnapshot.docs[0]
+        const facturesRef = collection(db, `clients/${mainClientDoc.id}/factures`)
+        const facturesSnapshot = await getDocs(facturesRef)
+        
+        const facturesData = facturesSnapshot.docs.map(doc => {
+          const data = doc.data()
+          return {
+            'N° Facture': data.numeroFacture || doc.id,
+            'Client': data.clientNom || '',
+            'Email Client': data.clientEmail || '',
+            'Date Création': data.dateCreation ? new Date(data.dateCreation.toDate()).toLocaleDateString('fr-FR') : '',
+            'Date Échéance': data.dateEcheance ? new Date(data.dateEcheance.toDate()).toLocaleDateString('fr-FR') : '',
+            'Statut': data.statut || 'brouillon',
+            'Montant HT': data.montantTotalHT ? `${data.montantTotalHT.toFixed(2)} €` : '0,00 €',
+            'Montant TVA': data.montantTotalTVA ? `${data.montantTotalTVA.toFixed(2)} €` : '0,00 €',
+            'Montant TTC': data.montantTotalTTC ? `${data.montantTotalTTC.toFixed(2)} €` : '0,00 €',
+            'Conditions': data.conditions || '',
+            'Notes': data.notes || '',
+            'SIRET Client': data.clientSiret || '',
+            'N° TVA Client': data.clientNumeroTVA || '',
+            'Nb Lignes': data.lignes ? data.lignes.length : 0,
+            'Origine Devis': data.originDevis ? data.originDevis.numeroDevis : '',
+            'Date Modification': data.lastModified ? new Date(data.lastModified.toDate()).toLocaleDateString('fr-FR') : ''
+          }
+        })
+        
+        const headers = ['N° Facture', 'Client', 'Email Client', 'Date Création', 'Date Échéance', 'Statut', 'Montant HT', 'Montant TVA', 'Montant TTC', 'Conditions', 'Notes', 'SIRET Client', 'N° TVA Client', 'Nb Lignes', 'Origine Devis', 'Date Modification']
+        exportToCSV(facturesData, 'factures', headers)
+        
+        toast.success(`${facturesData.length} factures exportées avec succès`)
+      } else {
+        toast.error('Aucune facture trouvée')
+      }
+    } catch (error) {
+      console.error('Erreur export factures:', error)
+      toast.error('Erreur lors de l\'export des factures')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   if (authLoading) {
     return (
@@ -1200,6 +1383,147 @@ export default function ParametrePage() {
                         {loading && <Loader className="w-4 h-4" />}
                         Sauvegarder
                       </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            </>
+          )}
+
+          {/* Comptabilité Section */}
+          {activeTab === 'compta' && (
+            <>
+              <motion.div variants={itemVariants}>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <FileSpreadsheet className="w-5 h-5" />
+                      Exports comptables
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="text-sm text-gray-600 mb-6">
+                      Exportez vos données au format CSV pour votre comptabilité. Les fichiers sont compatibles avec Excel et la plupart des logiciels comptables.
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      {/* Export Clients */}
+                      <div className="border rounded-lg p-4 space-y-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                            <Users className="w-5 h-5 text-blue-600" />
+                          </div>
+                          <div>
+                            <h3 className="font-medium">Clients</h3>
+                            <p className="text-sm text-gray-500">Base clients complète</p>
+                          </div>
+                        </div>
+                        <div className="text-xs text-gray-500 space-y-1">
+                          <div>• Informations de contact</div>
+                          <div>• SIRET, TVA, Code APE</div>
+                          <div>• Dates de création</div>
+                          <div>• Statuts et commentaires</div>
+                        </div>
+                        <Button 
+                          onClick={exportClients}
+                          disabled={loading}
+                          className="w-full"
+                          variant="outline"
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          {loading ? 'Export...' : 'Exporter CSV'}
+                        </Button>
+                      </div>
+
+                      {/* Export Devis */}
+                      <div className="border rounded-lg p-4 space-y-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                            <FileText className="w-5 h-5 text-green-600" />
+                          </div>
+                          <div>
+                            <h3 className="font-medium">Devis</h3>
+                            <p className="text-sm text-gray-500">Tous les devis créés</p>
+                          </div>
+                        </div>
+                        <div className="text-xs text-gray-500 space-y-1">
+                          <div>• Numéros et dates</div>
+                          <div>• Clients et montants</div>
+                          <div>• Statuts et validité</div>
+                          <div>• Informations fiscales</div>
+                        </div>
+                        <Button 
+                          onClick={exportDevis}
+                          disabled={loading}
+                          className="w-full"
+                          variant="outline"
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          {loading ? 'Export...' : 'Exporter CSV'}
+                        </Button>
+                      </div>
+
+                      {/* Export Factures */}
+                      <div className="border rounded-lg p-4 space-y-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                            <FileSpreadsheet className="w-5 h-5 text-orange-600" />
+                          </div>
+                          <div>
+                            <h3 className="font-medium">Factures</h3>
+                            <p className="text-sm text-gray-500">Toutes les factures</p>
+                          </div>
+                        </div>
+                        <div className="text-xs text-gray-500 space-y-1">
+                          <div>• Numéros et échéances</div>
+                          <div>• Montants HT/TTC/TVA</div>
+                          <div>• Statuts de paiement</div>
+                          <div>• Traçabilité devis</div>
+                        </div>
+                        <Button 
+                          onClick={exportFactures}
+                          disabled={loading}
+                          className="w-full"
+                          variant="outline"
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          {loading ? 'Export...' : 'Exporter CSV'}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Informations sur les formats */}
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
+                      <h4 className="font-medium text-blue-900 mb-2">Formats d'export disponibles</h4>
+                      <div className="text-sm text-blue-800 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+                          <span><strong>CSV (Excel)</strong> - Format standard avec séparateur point-virgule, compatible Excel France</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+                          <span><strong>Encodage UTF-8</strong> - Caractères spéciaux et accents préservés</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+                          <span><strong>Dates françaises</strong> - Format JJ/MM/AAAA</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+                          <span><strong>Montants formatés</strong> - Avec symbole € et décimales</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Conseils d'utilisation */}
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                      <h4 className="font-medium text-gray-900 mb-2">Conseils d'utilisation</h4>
+                      <div className="text-sm text-gray-700 space-y-1">
+                        <div>• Les fichiers sont nommés automatiquement avec la date d'export</div>
+                        <div>• Ouvrez avec Excel, LibreOffice Calc ou votre logiciel comptable</div>
+                        <div>• Les données sont exportées en temps réel depuis votre base</div>
+                        <div>• Répétez l'export régulièrement pour avoir les dernières données</div>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
