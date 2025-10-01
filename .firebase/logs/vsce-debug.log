@@ -102,3 +102,5 @@ Generated sources: index.d.ts [8025B] esm/index.esm.js [3575B] README.md [40931B
  {"metadata":{"emulator":{"name":"dataconnect"},"message":"I0923 15:27:01.984552    2887 dev.go:102] Listening on address (HTTP + gRPC): 127.0.0.1:50001\n"}}
 [debug] [2025-09-23T13:27:02.228Z] I0923 15:27:02.228069    2887 engine.go:169] [/emulator/apptrouvermonchantier 3c4d] ExecuteGraphqlRead IntrospectionQuery: succeeded. 
  {"metadata":{"emulator":{"name":"dataconnect"},"message":"I0923 15:27:02.228069    2887 engine.go:169] [/emulator/apptrouvermonchantier 3c4d] ExecuteGraphqlRead IntrospectionQuery: succeeded. \n"}}
+[info] [Firebase Plugin] Stopping Data Connect toolkit
+[warn] ⚠  Data Connect Emulator has exited upon receiving signal: SIGINT 
