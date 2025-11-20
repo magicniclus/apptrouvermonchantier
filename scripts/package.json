@@ -1,0 +1,14 @@
+{
+  "name": "firebase-data-generator",
+  "version": "1.0.0",
+  "description": "Script pour générer des données de test dans Firebase",
+  "main": "generate-projects.js",
+  "scripts": {
+    "generate": "node generate-projects.js",
+    "generate-simple": "node generate-projects-simple.js"
+  },
+  "dependencies": {
+    "firebase": "^10.7.1"
+  },
+  "type": "module"
+}
